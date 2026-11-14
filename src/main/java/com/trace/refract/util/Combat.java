@@ -156,6 +156,7 @@ public final class Combat {
         try {
             mc.interactionManager.attackEntity(mc.player, e);
             mc.player.swingHand(Hand.MAIN_HAND);
+            NetLog.record("attack", "target=" + e.getType().toString() + " dist=" + String.format(java.util.Locale.ROOT, "%.2f", eyeDistance(e)));
         } finally {
             endInternal();
         }
@@ -180,7 +181,10 @@ public final class Combat {
         try {
             ActionResult r = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND,
                     new BlockHitResult(center, side, pos, false));
-            if (r.isAccepted()) mc.player.swingHand(Hand.MAIN_HAND);
+            if (r.isAccepted()) {
+                mc.player.swingHand(Hand.MAIN_HAND);
+                NetLog.record("use", "pos=" + pos.toShortString() + " side=" + side + " dist=" + String.format(java.util.Locale.ROOT, "%.2f", reachTo(pos)));
+            }
             return r.isAccepted();
         } finally {
             endInternal();
@@ -205,7 +209,11 @@ public final class Combat {
         beginInternal();
         try {
             ActionResult r = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, ray);
-            if (r.isAccepted()) mc.player.swingHand(Hand.MAIN_HAND);
+            if (r.isAccepted()) {
+                mc.player.swingHand(Hand.MAIN_HAND);
+                NetLog.record("place", "support=" + support.toShortString() + " into=" + target.toShortString()
+                        + " side=" + side + " dist=" + String.format(java.util.Locale.ROOT, "%.2f", reachTo(support)));
+            }
             return r.isAccepted();
         } finally {
             endInternal();

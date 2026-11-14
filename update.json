@@ -1,5 +1,5 @@
 {
-  "version": "1.0.2",
-  "notes": "Combat actions are now sent before the movement packet (the ordering Grim's Post check reports), mouse binds show on module cards, and the Ambience crash is fixed.",
-  "jar": "dist/vanta-1.0.2.jar"
+  "version": "1.0.3",
+  "notes": "Aim yaw is now kept inside -180..180 (fixes Grim AimModulo360 from Auto Crystal and rotation easing), combat actions are sent before the movement packet, mouse binds show on module cards, and Ambience no longer crashes. Adds -Drefract.netlog diagnostics.",
+  "jar": "dist/vanta-1.0.3.jar"
 }

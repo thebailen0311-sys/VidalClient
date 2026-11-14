@@ -42,6 +42,7 @@ def livetest = System.getProperty('refract.livetest')
 tasks.named('runClient') {
     if (livetest) {
         jvmArgs "-Drefract.livetest=${livetest}"
+        jvmArgs '-Drefract.netlog'
         args '--username', 'RefractTest', '--quickPlayMultiplayer', 'localhost:25565', '--width', '1280', '--height', '720'
     }
 }

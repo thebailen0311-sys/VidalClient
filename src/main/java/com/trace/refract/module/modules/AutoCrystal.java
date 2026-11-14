@@ -82,7 +82,9 @@ public class AutoCrystal extends Module {
         double dx = target.x - mc.player.getX(), dz = target.z - mc.player.getZ();
         double dy = target.y - mc.player.getEyeY();
         double flat = Math.sqrt(dx * dx + dz * dz);
-        mc.player.setYaw((float) (Math.toDegrees(Math.atan2(dz, dx)) - 90.0));
+        // Yaw must stay inside -180..180: a raw atan2 result can land outside that range and the server's aim
+        // check reports it (AimModulo360) even though the camera looks correct locally.
+        mc.player.setYaw(net.minecraft.util.math.MathHelper.wrapDegrees((float) (Math.toDegrees(Math.atan2(dz, dx)) - 90.0)));
         mc.player.setPitch((float) -Math.toDegrees(Math.atan2(dy, flat)));
     }
 

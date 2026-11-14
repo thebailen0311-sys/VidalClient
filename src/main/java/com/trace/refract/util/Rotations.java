@@ -111,7 +111,7 @@ public final class Rotations {
         if (!silent) {
             // Move the rotation and last frame's rotation together (as mouse look does): the camera shows exactly this.
             float ddy = yaw - oldYaw, ddp = pitch - oldPitch;
-            p.setYaw(p.getYaw() + ddy);
+            p.setYaw(MathHelper.wrapDegrees(p.getYaw() + ddy));
             p.setPitch(MathHelper.clamp(p.getPitch() + ddp, -90f, 90f));
             p.lastYaw += ddy;
             p.lastPitch += ddp;

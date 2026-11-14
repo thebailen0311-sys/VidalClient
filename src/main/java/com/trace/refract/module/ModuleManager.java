@@ -112,7 +112,11 @@ public final class ModuleManager {
         for (Module m : MODULES) {
             long t0 = System.nanoTime();
             m.onAlwaysTick();
-            if (m.isEnabled()) m.onTick();
+            if (m.isEnabled()) {
+                com.trace.refract.util.NetLog.setModule(m.name);
+                m.onTick();
+                com.trace.refract.util.NetLog.setModule(null);
+            }
             com.trace.refract.util.Prof.add("t:" + m.name, System.nanoTime() - t0);
         }
     }

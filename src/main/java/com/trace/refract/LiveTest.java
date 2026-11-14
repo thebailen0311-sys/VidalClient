@@ -109,7 +109,7 @@ public final class LiveTest {
         double dz = e.getZ() - mc.player.getZ();
         double dy = (e.getY() + e.getHeight() * 0.5) - mc.player.getEyeY();
         double flat = Math.sqrt(dx * dx + dz * dz);
-        mc.player.setYaw((float) (Math.toDegrees(Math.atan2(dz, dx)) - 90.0));
+        mc.player.setYaw(net.minecraft.util.math.MathHelper.wrapDegrees((float) (Math.toDegrees(Math.atan2(dz, dx)) - 90.0)));
         mc.player.setPitch((float) -Math.toDegrees(Math.atan2(dy, flat)));
     }
 
@@ -172,7 +172,7 @@ public final class LiveTest {
                         net.minecraft.util.math.Vec3d c = z.getBoundingBox().getCenter();
                         net.minecraft.util.math.Vec3d eye = mc.player.getEyePos();
                         double dx = c.x - eye.x, dy = c.y - eye.y, dz = c.z - eye.z;
-                        mc.player.setYaw((float) (Math.toDegrees(Math.atan2(dz, dx)) - 90));
+                        mc.player.setYaw(net.minecraft.util.math.MathHelper.wrapDegrees((float) (Math.toDegrees(Math.atan2(dz, dx)) - 90)));
                         mc.player.setPitch((float) -Math.toDegrees(Math.atan2(dy, Math.sqrt(dx * dx + dz * dz))));
                     }
                 }
