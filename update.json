@@ -1,5 +1,5 @@
 {
-  "version": "1.0.8",
-  "notes": "Silent aim yaw is now wrapped before it reaches the packet, which fixes AimModulo360 across aim assist, anchor and crystals. Auto Crystal is a rewritten state machine that holds one spot and cycles obsidian -> crystal -> break. Anchor Macro turns silently. Auto Totem no longer opens a GUI.",
-  "jar": "dist/vanta-1.0.8.jar"
+  "version": "1.0.9",
+  "notes": "Auto Crystal now recognises obsidian you are already looking at instead of placing obsidian on top of it, reuses one spot, and bounds item swaps so it cannot flip forever. Entity reach is capped at 2.95 and block placement at 4.2, which removes the reach alerts. Anchor Macro no longer parks after one pop.",
+  "jar": "dist/vanta-1.0.9.jar"
 }

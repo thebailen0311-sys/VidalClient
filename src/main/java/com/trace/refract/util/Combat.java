@@ -169,8 +169,12 @@ public final class Combat {
         return true;
     }
 
+    /** Entity reach is checked at 3 blocks by the server; anything further is a guaranteed reach alert. */
+    public static final double MAX_ENTITY_REACH = 2.95;
+
     public static void attack(Entity e) {
         if (mc.player == null || mc.interactionManager == null || e == null) return;
+        if (eyeDistance(e) > MAX_ENTITY_REACH) return;
         beginInternal();
         try {
             mc.interactionManager.attackEntity(mc.player, e);
@@ -227,6 +231,7 @@ public final class Combat {
         if (ray == null || !ray.getBlockPos().equals(support) || ray.getSide() != side) return false;
         beginInternal();
         try {
+            if (mc.player.getEyePos().distanceTo(faceCenter) > 4.2) return false;
             ActionResult r = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, ray);
             if (r.isAccepted()) {
                 mc.player.swingHand(Hand.MAIN_HAND);

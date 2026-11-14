@@ -160,8 +160,10 @@ public class AnchorMacro extends Module {
             case CHARGE -> charge();
             case FINISH -> {
                 restoreSlot();
-                step = DONE;
-                if (oneShot) { oneShot = false; setEnabled(false, false); }
+                // A held bind keeps running: go back to idle so the next press (or the next anchor in front of
+                // you) starts a fresh cycle. Previously it parked in DONE and only ever popped once.
+                if (oneShot) { oneShot = false; step = DONE; setEnabled(false, false); }
+                else { step = IDLE; timer = placeDelay.asInt(); wait = 0; clicks = 0; safeDone = false; }
             }
             default -> { }
         }

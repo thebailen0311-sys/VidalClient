@@ -25,8 +25,8 @@ import net.minecraft.util.math.Vec3d;
  * placement never travels in the same tick as the turn that made it valid.
  */
 public class AutoCrystal extends Module {
-    public final NumberSetting placeRange = add(new NumberSetting("Place Range", 4.4, 2, 6, 0.1, "m"));
-    public final NumberSetting breakRange = add(new NumberSetting("Break Range", 4.4, 2, 6, 0.1, "m"));
+    public final NumberSetting placeRange = add(new NumberSetting("Place Range", 4.2, 2, 4.2, 0.1, "m"));
+    public final NumberSetting breakRange = add(new NumberSetting("Break Range", 2.9, 1, 3, 0.05, "m"));
     public final NumberSetting crystalDelay = add(new NumberSetting("Crystal Speed", 2, 0, 20, 1, "t"));
     public final NumberSetting obsidianDelay = add(new NumberSetting("Obsidian Speed", 2, 0, 20, 1, "t"));
     public final BoolSetting autoObsidian = add(new BoolSetting("Place Obsidian", true));
@@ -35,7 +35,7 @@ public class AutoCrystal extends Module {
     private enum Step { PICK, SWAP_OBSIDIAN, PLACE_OBSIDIAN, WAIT_OBSIDIAN, SWAP_CRYSTAL, PLACE_CRYSTAL, BREAK, DONE }
 
     private Step step = Step.PICK;
-    private int timer, wait, originalSlot = -1;
+    private int timer, wait, originalSlot = -1, swapAttempts;
     /** Latched for the whole cycle: the block the crystal goes on top of. */
     private BlockPos base;
     private BlockPos support;
@@ -46,7 +46,7 @@ public class AutoCrystal extends Module {
     }
 
     @Override public void onEnable() {
-        timer = wait = 0;
+        timer = wait = swapAttempts = 0;
         base = null;
         support = null;
         step = Step.PICK;
@@ -88,10 +88,12 @@ public class AutoCrystal extends Module {
             }
             case SWAP_OBSIDIAN -> {
                 if (!Combat.holding(Items.OBSIDIAN)) {
-                    if (!Combat.holdItem(Items.OBSIDIAN)) { step = Step.DONE; return; }
+                    // Bounded: if the item cannot be selected, stop instead of swapping in place forever.
+                    if (++swapAttempts > 5 || !Combat.holdItem(Items.OBSIDIAN)) { step = Step.DONE; return; }
                     timer = 2; // the held item has to reach the server before the placement does
                     return;
                 }
+                swapAttempts = 0;
                 step = Step.PLACE_OBSIDIAN;
             }
             case PLACE_OBSIDIAN -> {
@@ -116,10 +118,11 @@ public class AutoCrystal extends Module {
             }
             case SWAP_CRYSTAL -> {
                 if (!Combat.holding(Items.END_CRYSTAL)) {
-                    if (!Combat.holdItem(Items.END_CRYSTAL)) { step = Step.DONE; return; }
+                    if (++swapAttempts > 5 || !Combat.holdItem(Items.END_CRYSTAL)) { step = Step.DONE; return; }
                     timer = 2;
                     return;
                 }
+                swapAttempts = 0;
                 step = Step.PLACE_CRYSTAL;
             }
             case PLACE_CRYSTAL -> {
@@ -151,17 +154,32 @@ public class AutoCrystal extends Module {
         }
     }
 
-    /** Chooses the spot under the crosshair once per cycle and keeps it. */
+    /**
+     * Chooses the spot under the crosshair once per cycle and keeps it.
+     *
+     * <p>Looking straight at obsidian has to mean "put the crystal on this", not "place obsidian on top of it".
+     * The old version only ever considered the block <em>adjacent</em> to the face, so aiming at an obsidian block
+     * (for example one placed a moment earlier) resolved to the air above it and placed another obsidian there,
+     * which is the stacking you saw.
+     */
     private boolean pick() {
         var hit = Combat.aimedBlock(placeRange.get() + 0.5);
         if (hit == null) return false;
-        BlockPos supportPos = hit.getBlockPos();
+        BlockPos hitPos = hit.getBlockPos();
         Direction face = hit.getSide();
-        BlockPos target = supportPos.offset(face);
+        var hitState = mc.world.getBlockState(hitPos);
+        if (hitState.getBlock() == Blocks.OBSIDIAN) {
+            if (Combat.reachTo(hitPos) > placeRange.get()) return false;
+            support = hitPos; // crystal goes on the obsidian itself
+            side = Direction.UP;
+            base = hitPos;
+            return true;
+        }
+        BlockPos target = hitPos.offset(face);
         if (Combat.reachTo(target) > placeRange.get()) return false;
         var state = mc.world.getBlockState(target);
         if (!state.isReplaceable() && state.getBlock() != Blocks.OBSIDIAN) return false;
-        support = supportPos;
+        support = hitPos;
         side = face;
         base = target;
         return true;
