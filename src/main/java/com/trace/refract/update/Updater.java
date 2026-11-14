@@ -99,8 +99,17 @@ public final class Updater {
         Files.createDirectories(mods);
         String fileName = "vanta-" + sanitize(rel.version) + ".jar";
         Path target = mods.resolve(fileName);
-        HttpURLConnection d = (HttpURLConnection) new URL(rel.jarUrl).openConnection();
+        // raw.githubusercontent.com caches a file for five minutes and the jar changes with every build, so the
+        // manifest checksum could describe bytes the CDN is not serving yet. Fetch repo jars through the contents API.
+        String jarUrl = rel.jarUrl;
+        boolean apiRaw = rel.source.startsWith("update.json") && jarUrl.startsWith(RAW);
+        if (apiRaw) {
+            String path = jarUrl.substring(RAW.length());
+            jarUrl = "https://api.github.com/repos/" + REPO + "/contents/" + path + "?ref=main";
+        }
+        HttpURLConnection d = (HttpURLConnection) new URL(jarUrl).openConnection();
         d.setRequestProperty("User-Agent", USER_AGENT);
+        if (apiRaw) d.setRequestProperty("Accept", "application/vnd.github.raw");
         d.setConnectTimeout(10000);
         d.setReadTimeout(30000);
         d.setInstanceFollowRedirects(true);
@@ -119,33 +128,43 @@ public final class Updater {
             }
         }
 
-        // Fabric loads every jar in mods/, and two jars with the same mod id abort the launch. The running jar has to
-        // be out of the way before the new one lands. Windows lets an open jar be renamed even when it cannot be
-        // deleted, so move it to *.old and let pruneOlder() delete that on the next start.
+        // Fabric loads every jar in mods/, and two jars with the same mod id abort the launch, while Windows will not
+        // let a running process rename or delete its own jar. So stage the jar, start a helper that does not load the
+        // mod jar, and let it swap the files the moment the game exits.
         Path running = runningJar();
-        boolean retired = false;
-        if (running != null && Files.isRegularFile(running)
-                && running.getParent() != null && running.getParent().toAbsolutePath().equals(mods.toAbsolutePath())) {
-            Path old = running.resolveSibling(running.getFileName() + ".old");
-            try {
-                Files.deleteIfExists(old);
-                Files.move(running, old, StandardCopyOption.REPLACE_EXISTING);
-                retired = true;
-            } catch (Exception ex) {
-                Refract.LOG.warn("Could not retire the running jar: {}", ex.toString());
-            }
-        }
-        if (running != null && !retired && Files.exists(running)) {
-            // Locked (or not in mods/): never leave two versions behind. Park the download and say exactly what to do.
-            Path pending = mods.resolve(fileName + ".pending");
-            Files.move(tmp, pending, StandardCopyOption.REPLACE_EXISTING);
-            status = "downloaded; replace " + running.getFileName() + " with " + pending.getFileName();
-            announce(rel, false);
+        if (running == null || !Files.isRegularFile(running)) {
+            Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING);
+            status = "downloaded " + rel.version + " -> mods/" + fileName + " (restart to apply)";
+            announce(rel, true);
             return;
         }
-        Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING);
-        status = "downloaded " + rel.version + " -> mods/" + fileName + " (restart to apply)";
-        announce(rel, true);
+
+        Path dir = mods.resolve(".vanta-swap");
+        try {
+            Files.createDirectories(dir);
+            Path helper = dir.resolve("Swap.class");
+            try (InputStream in = Updater.class.getResourceAsStream("/com/trace/refract/update/Swap.class")) {
+                if (in == null) throw new IllegalStateException("Swap.class missing from jar");
+                Files.copy(in, helper, StandardCopyOption.REPLACE_EXISTING);
+            }
+            Path staged = dir.resolve(fileName);
+            Files.move(tmp, staged, StandardCopyOption.REPLACE_EXISTING);
+            String java = Path.of(System.getProperty("java.home"), "bin", "java").toString();
+            ProcessBuilder pb = new ProcessBuilder(java, "-cp", dir.toAbsolutePath().toString(),
+                    "com.trace.refract.update.Swap",
+                    running.toAbsolutePath().toString(), staged.toAbsolutePath().toString(),
+                    String.valueOf(ProcessHandle.current().pid()), target.toAbsolutePath().toString());
+            pb.redirectErrorStream(true);
+            pb.redirectOutput(dir.resolve("swap.log").toFile());
+            Process p = pb.start();
+            status = "downloaded " + rel.version + "; it is installed when you close the game (swap pid " + p.pid() + ")";
+            announce(rel, true);
+        } catch (Exception ex) {
+            Refract.LOG.warn("Update handover failed: {}", ex.toString());
+            try { Files.move(tmp, mods.resolve(fileName + ".pending"), StandardCopyOption.REPLACE_EXISTING); } catch (Exception ignored) { }
+            status = "downloaded, but the automatic swap failed: replace the old jar in mods/ by hand";
+            announce(rel, false);
+        }
     }
 
     /** GitHub release, or null when the repo has none / is unreachable. */
