@@ -91,12 +91,17 @@ public abstract class HeldItemRendererMixin {
         Arm arm = player.getMainArm();
         float f = arm != Arm.LEFT ? 1f : -1f;
         KnifeRenderer.armRenders++;
+        // The swing is ours now: the arm is drawn in its resting pose (swing 0), then the whole hand is moved by
+        // the chosen style. That is what makes this replace the vanilla swipe instead of playing it underneath.
+        String style = c == null ? "Slash" : c.swingStyle.get();
         matrices.push();
-        renderArmHoldingItem(matrices, queue, light, equipProgress, swingProgress, arm);
+        refract$customSwing(matrices, arm, swingProgress, style);
+        renderArmHoldingItem(matrices, queue, light, equipProgress, 0f, arm);
         matrices.pop();
         // Same pose again, then into the arm bone (pivot) and the held-item placement used for third person.
         matrices.push();
-        refract$armPose(matrices, arm, equipProgress, swingProgress);
+        refract$customSwing(matrices, arm, swingProgress, style);
+        refract$armPose(matrices, arm, equipProgress, 0f);
         matrices.translate(f * -5f / 16f, 2f / 16f, 0f);
         matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(-90f));
         matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(180f));
@@ -112,6 +117,40 @@ public abstract class HeldItemRendererMixin {
         }
         matrices.pop();
         ci.cancel();
+    }
+
+    /**
+     * The custom swing for the whole hand. Applied to the arm and to the knife, so hand and blade move together and
+     * no part of the vanilla swipe is left playing underneath.
+     */
+    @Unique
+    private static void refract$customSwing(MatrixStack m, Arm arm, float swing, String style) {
+        float f = arm != Arm.LEFT ? 1f : -1f;
+        float s = MathHelper.sin(swing * (float) Math.PI);
+        float e = com.trace.refract.util.Anim.easeInOutCubic(MathHelper.clamp(swing, 0f, 1f));
+        switch (style) {
+            case "Spin" -> {
+                m.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(f * 360f * e));
+                m.translate(f * 0.05f * s, 0.03f * s, -0.08f * s);
+            }
+            case "Stab" -> {
+                m.translate(f * 0.04f * s, 0.02f * s, -0.42f * s);
+                m.multiply(RotationAxis.POSITIVE_X.rotationDegrees(-16f * s));
+            }
+            case "Flip" -> {
+                m.multiply(RotationAxis.POSITIVE_X.rotationDegrees(360f * e));
+                m.translate(0, 0.22f * s, 0);
+            }
+            case "Whirl" -> {
+                m.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(f * 720f * e));
+                m.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(f * -35f * s));
+            }
+            default -> { // Slash: a sweep across the screen and back, kept inside the view
+                m.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(f * -32f * s));
+                m.multiply(RotationAxis.POSITIVE_X.rotationDegrees(-14f * s));
+                m.translate(f * 0.10f * s, 0.04f * s, -0.16f * s);
+            }
+        }
     }
 
     @Inject(method = "renderFirstPersonItem", at = @At("RETURN"))

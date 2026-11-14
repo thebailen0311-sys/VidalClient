@@ -1,5 +1,5 @@
 {
-  "version": "1.0.6",
-  "notes": "Custom Bars is now anchored to the vanilla hotbar geometry with an opaque plate so the old bars are actually covered, and the knife swing styles (Slash, Spin, Stab, Flip, Whirl) move far more, with an always-on idle float.",
-  "jar": "dist/vanta-1.0.6.jar"
+  "version": "1.0.7",
+  "notes": "Custom swing styles now replace the vanilla hand swing instead of stacking on it, the hotbar is a redesigned glass bar with level badge, segmented health and food, durability and armour, and it is anchored so it can no longer sit off centre.",
+  "jar": "dist/vanta-1.0.7.jar"
 }

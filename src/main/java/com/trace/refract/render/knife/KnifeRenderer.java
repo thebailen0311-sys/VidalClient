@@ -85,42 +85,13 @@ public final class KnifeRenderer implements SpecialModelRenderer<Void> {
                 m.translate(0, -7 * e, 0);
                 about(m, 4, 4, new Quaternionf().rotateZ((float) Math.toRadians(-85 * e)));
             }
-            // Slash: on each attack the blade whips through an arc around the grip and flicks back, plus a gentle idle sway.
+            // Swing motion itself is applied to the whole hand by HeldItemRendererMixin, so it replaces the vanilla
+            // swipe instead of stacking on it. What stays here is the per-knife idle life, which the hand should not
+            // inherit (the arm must not breathe, only the blade).
             if (inHand) {
-                var cos = ModuleManager.cosmetics;
-                String style = cos == null ? "Slash" : cos.swingStyle.get();
-                float sw = (float) Math.sin(Math.PI * swing);
-                float e = Anim.easeInOutCubic(swing);
-                // Big, readable motion: the whole blade travels as well as rotating, so a swing is obvious at a
-                // glance instead of a small flick near the grip.
-                switch (style) {
-                    case "Spin" -> {
-                        m.translate(0, 2.5f * sw, -1.5f * sw);
-                        about(m, 5, 5, new Quaternionf().rotateZ((float) Math.toRadians(-360 * e)));
-                    }
-                    case "Stab" -> {
-                        m.translate(11 * sw, 8 * sw, -6 * sw);
-                        about(m, 3, 3, new Quaternionf().rotateZ((float) Math.toRadians(-24 * sw)));
-                    }
-                    case "Flip" -> {
-                        m.translate(0, 11 * sw, -3 * sw);
-                        about(m, 9, 9, new Quaternionf().rotateAxis((float) Math.toRadians(360 * e), -0.7071f, 0.7071f, 0));
-                    }
-                    case "Whirl" -> {
-                        m.translate(0, 3 * sw, -2 * sw);
-                        about(m, 5, 5, new Quaternionf().rotateY((float) Math.toRadians(720 * e)).rotateZ((float) Math.toRadians(-55 * sw)));
-                    }
-                    default -> { // Slash: a wide 150-degree arc out of the hand and back
-                        float flick = (float) Math.sin(Math.PI * Math.min(1, swing * 1.6f));
-                        m.translate(-3 * sw, 4 * sw, -4 * sw);
-                        about(m, 5, 5, new Quaternionf()
-                                .rotateZ((float) Math.toRadians(-150 * flick + 26 * sw * sw))
-                                .rotateX((float) Math.toRadians(42 * sw)));
-                    }
-                }
-                // Idle float, always on: the knife breathes in the hand so it never looks frozen.
-                m.translate(0, 0.35f * (float) Math.sin(now * 1.9), 0);
-                about(m, 5, 5, new Quaternionf().rotateZ((float) Math.toRadians(2.8 * Math.sin(now * 1.7))));
+                float now2 = Time.seconds();
+                m.translate(0, 0.35f * (float) Math.sin(now2 * 1.9), 0);
+                about(m, 5, 5, new Quaternionf().rotateZ((float) Math.toRadians(2.8 * Math.sin(now2 * 1.7))));
             }
             float t = (now - inspectStart) / mesh.inspectSeconds;
             if (t >= 0 && t < 1) {

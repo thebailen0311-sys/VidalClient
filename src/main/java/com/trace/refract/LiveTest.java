@@ -303,6 +303,32 @@ public final class LiveTest {
                     log("base t=" + ticks + " n=" + ModuleManager.baseFinder.candidates.size() + " [" + sb + "]");
                 }
             }
+            case "look" -> {
+                if (ticks == 20) {
+                    cmd(mc, "gamemode creative");
+                    cmd(mc, "give @s diamond_sword");
+                    cmd(mc, "give @s cooked_beef 8");
+                    cmd(mc, "give @s iron_pickaxe");
+                    cmd(mc, "give @s golden_apple 4");
+                    enable("custom bars", true);
+                    enable("cosmetics", true);
+                    log("look spec armed");
+                }
+                // Hold the sword, then swing repeatedly so a screenshot can catch the animation.
+                if (ticks == 40) {
+                    for (int i = 0; i < 9; i++) {
+                        if (mc.player.getInventory().getStack(i).getItem() == net.minecraft.item.Items.DIAMOND_SWORD) {
+                            mc.player.getInventory().setSelectedSlot(i);
+                            break;
+                        }
+                    }
+                }
+                if (ticks > 50 && ticks < 110 && ticks % 8 == 0) mc.player.swingHand(net.minecraft.util.Hand.MAIN_HAND);
+                if (ticks == 54) shoot(mc, "look-swing-a.png");
+                if (ticks == 56) shoot(mc, "look-swing-b.png");
+                if (ticks == 80) shoot(mc, "look-hud.png");
+                if (ticks == 120) log("look done");
+            }
             case "hud" -> {
                 if (ticks == 20) {
                     cmd(mc, "gamemode creative");
