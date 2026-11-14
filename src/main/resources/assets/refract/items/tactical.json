@@ -1,0 +1,10 @@
+{
+  "model": {
+    "type": "minecraft:special",
+    "base": "refract:item/knife_base",
+    "model": {
+      "type": "refract:knife",
+      "kind": "tactical"
+    }
+  }
+}

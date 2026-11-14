@@ -1,0 +1,4 @@
+[23:37:21] [Render thread/INFO] (Vanta) [livetest] joined, spec=totem
+[23:37:21] [Render thread/INFO] (Vanta) [livetest] setup commands sent
+[23:37:23] [Render thread/INFO] (Vanta) [livetest] auto totem on
+[23:37:33] [Render thread/INFO] (Vanta) [livetest] RESULT spec=totem finished, modules exercised=1 health=5.0 onGround=true

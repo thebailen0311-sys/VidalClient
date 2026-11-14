@@ -1,0 +1,3 @@
+[23:38:01] [Render thread/INFO] (Vanta) [livetest] joined, spec=stap
+[23:38:01] [Render thread/INFO] (Vanta) [livetest] setup commands sent
+[23:38:13] [Render thread/INFO] (Vanta) [livetest] RESULT spec=stap finished, modules exercised=1 health=16.0 onGround=true

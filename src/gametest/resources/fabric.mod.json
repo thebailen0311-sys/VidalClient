@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "refract-gametest",
+  "version": "1.0.0",
+  "name": "Refract Screenshot Tests",
+  "environment": "client",
+  "entrypoints": {
+    "fabric-client-gametest": ["com.trace.refract.test.RefractScreenshotTest"]
+  },
+  "depends": { "refract": "*" }
+}

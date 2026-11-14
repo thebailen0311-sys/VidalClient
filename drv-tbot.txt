@@ -1,0 +1,14 @@
+[23:36:38] [Render thread/INFO] (Vanta) [livetest] joined, spec=tbot
+[23:36:38] [Render thread/INFO] (Vanta) [livetest] setup commands sent
+[23:36:40] [Render thread/INFO] (Vanta) [livetest] hotbar: 0=minecraft:diamond_sword 1=minecraft:obsidian 2=minecraft:end_crystal 3=minecraft:glowstone 4=minecraft:respawn_anchor 5=minecraft:totem_of_undying 6=minecraft:air 7=minecraft:air 8=minecraft:air 
+[23:36:40] [Render thread/INFO] (Vanta) [livetest] attack held, range widened
+[23:36:42] [Render thread/INFO] (Vanta) [livetest] t=80 held=minecraft:diamond_sword atkKey=true cross=ENTITY targetDist=1.58 cooldown=0.16 hp=3.2 tbot=true zY=78.1 playerY=79.0 eye=2.02 gates[holdAtk=true holdWeapon=true critReady=false best=true]
+[23:36:43] [Render thread/INFO] (Vanta) [livetest] t=100 held=minecraft:diamond_sword atkKey=true cross=ENTITY targetDist=1.35 cooldown=0.72 hp=0.0 tbot=true zY=78.1 playerY=78.5 eye=1.66 gates[holdAtk=true holdWeapon=true critReady=true best=false]
+[23:36:44] [Render thread/INFO] (Vanta) [livetest] t=120 held=minecraft:diamond_sword atkKey=true cross=BLOCK targetDist=-1.00 cooldown=1.00 hp=- tbot=true zY=- playerY=78.0 eye=- gates[holdAtk=true holdWeapon=true critReady=false best=false]
+[23:36:45] [Render thread/INFO] (Vanta) [livetest] t=140 held=minecraft:diamond_sword atkKey=true cross=BLOCK targetDist=-1.00 cooldown=1.00 hp=- tbot=true zY=- playerY=78.0 eye=- gates[holdAtk=true holdWeapon=true critReady=false best=false]
+[23:36:46] [Render thread/INFO] (Vanta) [livetest] t=160 held=minecraft:diamond_sword atkKey=true cross=BLOCK targetDist=-1.00 cooldown=1.00 hp=- tbot=true zY=- playerY=78.0 eye=- gates[holdAtk=true holdWeapon=true critReady=false best=false]
+[23:36:47] [Render thread/INFO] (Vanta) [livetest] t=180 held=minecraft:diamond_sword atkKey=true cross=BLOCK targetDist=-1.00 cooldown=1.00 hp=- tbot=true zY=- playerY=78.0 eye=- gates[holdAtk=true holdWeapon=true critReady=false best=false]
+[23:36:48] [Render thread/INFO] (Vanta) [livetest] t=200 held=minecraft:diamond_sword atkKey=true cross=BLOCK targetDist=-1.00 cooldown=1.00 hp=- tbot=true zY=- playerY=78.0 eye=- gates[holdAtk=true holdWeapon=true critReady=false best=false]
+[23:36:49] [Render thread/INFO] (Vanta) [livetest] t=220 held=minecraft:diamond_sword atkKey=true cross=BLOCK targetDist=-1.00 cooldown=1.00 hp=- tbot=true zY=- playerY=78.0 eye=- gates[holdAtk=true holdWeapon=true critReady=false best=false]
+[23:36:50] [Render thread/INFO] (Vanta) [livetest] t=240 held=minecraft:diamond_sword atkKey=true cross=BLOCK targetDist=-1.00 cooldown=1.00 hp=- tbot=true zY=- playerY=78.0 eye=- gates[holdAtk=true holdWeapon=true critReady=false best=false]
+[23:36:50] [Render thread/INFO] (Vanta) [livetest] RESULT spec=tbot finished, modules exercised=2 health=6.2148905 onGround=true

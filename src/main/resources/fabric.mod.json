@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "id": "refract",
+  "version": "${version}",
+  "name": "Refract",
+  "description": "Base-hunting client: underground Base Finder with a surface filter, Activity Finder, Growth ESP (overgrown kelp and amethyst), Sound Locator with tracers, Storage ESP and Freecam.",
+  "authors": ["Trace"],
+  "license": "MIT",
+  "contact": {
+    "homepage": "https://github.com/thebailen0311-sys/VidalClient",
+    "sources": "https://github.com/thebailen0311-sys/VidalClient",
+    "issues": "https://github.com/thebailen0311-sys/VidalClient/issues"
+  },
+  "environment": "client",
+  "entrypoints": {
+    "client": ["com.trace.refract.Refract"]
+  },
+  "mixins": ["refract.mixins.json"],
+  "depends": {
+    "fabricloader": ">=0.18.4",
+    "minecraft": "~1.21.11",
+    "java": ">=21",
+    "fabric-api": "*"
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "com.trace.refract.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "AbstractClientPlayerEntityMixin",
+    "CameraMixin",
+    "ClientPlayNetworkHandlerMixin",
+    "ClientPlayerEntityMixin",
+    "ClientPlayerInteractionManagerMixin",
+    "DrawContextAccessor",
+    "EntityMixin",
+    "EntityRendererMixin",
+    "FogRendererMixin",
+    "FireworkRocketEntityAccessor",
+    "GameRendererMixin",
+    "HandledScreenAccessor",
+    "HeldItemRendererMixin",
+    "ItemModelManagerMixin",
+    "KeyboardInputMixin",
+    "MouseMixin",
+    "SkyRenderingMixin",
+    "SpecialModelTypesAccessor",
+    "WorldRendererMixin"
+  ],
+  "injectors": { "defaultRequire": 1 }
+}

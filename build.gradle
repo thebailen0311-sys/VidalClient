@@ -1,0 +1,51 @@
+plugins {
+    id 'fabric-loom' version "${loom_version}"
+}
+
+version = "${project.mod_version}+mc${project.minecraft_version}"
+group = project.maven_group
+base { archivesName = project.archives_base_name }
+
+dependencies {
+    minecraft "com.mojang:minecraft:${project.minecraft_version}"
+    mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
+    modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+    // The real anticheat, run on the test world's integrated server, so the game test reports actual flags.
+}
+
+processResources {
+    inputs.property "version", project.version
+    filesMatching("fabric.mod.json") { expand "version": project.version }
+}
+
+tasks.withType(JavaCompile).configureEach { it.options.release = 21 }
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+}
+
+fabricApi {
+    configureTests {
+        createSourceSet = true
+        modId = "refract-gametest"
+        enableGameTests = false
+        enableClientGameTests = true
+        eula = true
+    }
+}
+
+// Scripted live-server run: ./gradlew runClient -Drefract.livetest=tbot
+// Joins the local test server so its anticheat can be read from the server console.
+def livetest = System.getProperty('refract.livetest')
+tasks.named('runClient') {
+    if (livetest) {
+        jvmArgs "-Drefract.livetest=${livetest}"
+        args '--username', 'RefractTest', '--quickPlayMultiplayer', 'localhost:25565', '--width', '1280', '--height', '720'
+    }
+}
+
+tasks.named('runClientGameTest') {
+    jvmArgs '-Dfabric.client.gametest.disableNetworkSynchronizer=true'
+}

@@ -1,0 +1,5 @@
+{
+  "version": "1.0.0",
+  "notes": "First public build: Base Finder with base classification, Ancient Debris finder, Block ESP, Auto Crystal, Anchor Macro, Trigger Bot, Auto Totem, Auto S Tap, Freecam and the built-in auto updater.",
+  "jar": "dist/vanta-1.0.0.jar"
+}

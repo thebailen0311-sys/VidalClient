@@ -1,0 +1,15 @@
+[23:35:18] [Render thread/INFO] (Vanta) [livetest] joined, spec=crystal
+[23:35:19] [Render thread/INFO] (Vanta) [livetest] setup commands sent
+[23:35:21] [Render thread/INFO] (Vanta) [livetest] before: obsidian=0 crystals=0
+[23:35:21] [Render thread/INFO] (Vanta) [livetest] auto crystal on, looking down
+[23:35:22] [Render thread/INFO] (Vanta) [livetest] t=80 obsidian=1 crystals=0 held=minecraft:end_crystal
+[23:35:23] [Render thread/INFO] (Vanta) [livetest] t=100 obsidian=1 crystals=0 held=minecraft:end_crystal
+[23:35:24] [Render thread/INFO] (Vanta) [livetest] selected obsidian in slot 1
+[23:35:24] [Render thread/INFO] (Vanta) [livetest] t=120 obsidian=1 crystals=0 held=minecraft:obsidian
+[23:35:25] [Render thread/INFO] (Vanta) [livetest] t=140 obsidian=1 crystals=0 held=minecraft:obsidian
+[23:35:26] [Render thread/INFO] (Vanta) [livetest] t=160 obsidian=1 crystals=0 held=minecraft:obsidian
+[23:35:27] [Render thread/INFO] (Vanta) [livetest] t=180 obsidian=1 crystals=0 held=minecraft:obsidian
+[23:35:28] [Render thread/INFO] (Vanta) [livetest] t=200 obsidian=1 crystals=0 held=minecraft:obsidian
+[23:35:29] [Render thread/INFO] (Vanta) [livetest] t=220 obsidian=1 crystals=0 held=minecraft:obsidian
+[23:35:30] [Render thread/INFO] (Vanta) [livetest] t=240 obsidian=1 crystals=0 held=minecraft:obsidian
+[23:35:30] [Render thread/INFO] (Vanta) [livetest] RESULT spec=crystal finished, modules exercised=1 health=5.2148905 onGround=true
