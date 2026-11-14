@@ -166,8 +166,11 @@ public final class Updater {
     /** Repository manifest: a push is enough, no release required. */
     private static Release fetchManifest() {
         try {
-            // raw.githubusercontent.com caches with max-age=300; a unique query keeps a fresh push visible at once.
-            JsonObject o = getJson(MANIFEST + "?t=" + System.currentTimeMillis());
+            // raw.githubusercontent.com is fronted by a CDN that caches for five minutes and ignores query strings,
+            // so a brand-new push could stay invisible. The contents API is always the current commit; raw is the
+            // fallback for when the API rate limit (60/hour per IP) is exhausted.
+            JsonObject o = fetchManifestApi();
+            if (o == null || !o.has("version")) o = getJson(MANIFEST + "?t=" + System.currentTimeMillis());
             if (o == null || !o.has("version")) return null;
             String v = o.get("version").getAsString();
             String notes = o.has("notes") && !o.get("notes").isJsonNull() ? o.get("notes").getAsString() : "";
@@ -175,6 +178,19 @@ public final class Updater {
             String sha = o.has("sha256") && !o.get("sha256").isJsonNull() ? o.get("sha256").getAsString() : null;
             String url = jar.isEmpty() ? null : (jar.startsWith("http") ? jar : RAW + jar);
             return new Release(v, v, notes, url, sha, "update.json");
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /** update.json as committed on main, read through the GitHub contents API (never CDN-cached). */
+    private static JsonObject fetchManifestApi() {
+        try {
+            JsonObject root = getJson("https://api.github.com/repos/" + REPO + "/contents/update.json?ref=main");
+            if (root == null || !root.has("content")) return null;
+            String b64 = root.get("content").getAsString().replaceAll("\\s", "");
+            String text = new String(java.util.Base64.getDecoder().decode(b64), StandardCharsets.UTF_8);
+            return JsonParser.parseString(text).getAsJsonObject();
         } catch (Exception e) {
             return null;
         }
