@@ -32,71 +32,75 @@ public class CustomBars extends Module {
         super("Custom Bars", "Custom hotbar with health, food and XP bars in the theme style.", Category.RENDER);
     }
 
+    /**
+     * Laid out on the vanilla hotbar's own geometry: 182×22 centred on the bottom edge, health and hunger directly
+     * above it, XP as a thin line between them. Everything is drawn in a local frame anchored to bottom-centre, so
+     * the panel and its contents can never drift off centre, and the backing plate is opaque so the vanilla bars
+     * underneath are genuinely covered rather than showing through a translucent panel.
+     */
     @Override public void onHud(Theme t, float sw, float sh) {
         var p = mc.player;
         if (p == null || mc.options.hudHidden) return;
-        float s = scale.asFloat();
-        float w = 196 * s, h = 46 * s;
-        float x = sw / 2 - w / 2, y = sh - h - 6 * s + offsetY.asFloat();
-
-        if (hideVanilla.on()) Gfx.frost(t, x - 4 * s, y - 4 * s, w + 8 * s, h + 8 * s, 10 * s, 0.82f);
-
-        float barW = (w - 12 * s) / 2;
-        if (health.on()) {
-            float hp = p.getHealth() + p.getAbsorptionAmount(), max = Math.max(1f, p.getMaxHealth() + p.getAbsorptionAmount());
-            float frac = Math.min(1f, hp / max);
-            bar(x + 6 * s, y + 4 * s, barW, 7 * s, frac, 0xFFF2555A, 0xFFFF8A5C, t);
-            if (numbers.on()) {
-                String label = String.format(java.util.Locale.ROOT, "%.0f", hp);
-                Gfx.text(label, x + 9 * s, y + 5 * s, Gfx.SMALL * s, Font.Weight.BOLD, 0xFFFFFFFF);
+        float k = scale.asFloat();
+        float cy = sh + offsetY.asFloat();
+        Gfx.pushPlace(sw / 2, cy, sw / 2, cy, k);
+        try {
+            // Local frame: x in -105..105, y in -56..-2 (0 is the bottom edge of the screen).
+            if (hideVanilla.on()) {
+                Gfx.round(-107, -58, 214, 56, 9, 0xF00A0C11);          // opaque cover
+                Gfx.round(-107, -58, 214, 56, 9, 0x30FFFFFF);          // glass sheen
+                Gfx.round(-103, -55, 206, 22, 7, 0x14FFFFFF);          // subtle inner lift
             }
-        }
-        if (food.on()) {
-            int fd = p.getHungerManager().getFoodLevel();
-            float frac = Math.min(1f, fd / 20f);
-            bar(x + 6 * s + barW + 4 * s, y + 4 * s, barW - 4 * s, 7 * s, frac, 0xFFC98A3C, 0xFFFFD27A, t);
-            if (numbers.on()) {
-                String label = Integer.toString(fd);
-                float lw = Gfx.width(label, Gfx.SMALL * s, Font.Weight.BOLD);
-                Gfx.text(label, x + 6 * s + barW * 2 - 10 * s - lw, y + 5 * s, Gfx.SMALL * s, Font.Weight.BOLD, 0xFFFFFFFF);
-            }
-        }
 
-        if (xp.on()) {
-            float frac = Math.min(1f, Math.max(0f, p.experienceProgress));
-            Gfx.round(x + 6 * s, y + 14 * s, w - 12 * s, 3 * s, 1.5f * s, 0x2AFFFFFF);
-            if (frac > 0.001f)
-                Gfx.roundGradientH(x + 6 * s, y + 14 * s, (w - 12 * s) * frac, 3 * s, 1.5f * s, t.accent(), t.accent2());
-            if (numbers.on() && p.experienceLevel > 0) {
-                String lv = Integer.toString(p.experienceLevel);
-                Gfx.text(lv, x + w / 2 - Gfx.width(lv, Gfx.SMALL * s, Font.Weight.BOLD) / 2, y + 1 * s,
-                        Gfx.SMALL * s, Font.Weight.BOLD, t.accent2());
+            if (xp.on()) {
+                float frac = Math.min(1f, Math.max(0f, p.experienceProgress));
+                Gfx.round(-96, -36, 192, 3, 1.5f, 0x2AFFFFFF);
+                if (frac > 0.001f) Gfx.roundGradientH(-96, -36, 192 * frac, 3, 1.5f, t.accent(), t.accent2());
+                if (numbers.on() && p.experienceLevel > 0) {
+                    String lv = Integer.toString(p.experienceLevel);
+                    Gfx.text(lv, -Gfx.width(lv, 6, Font.Weight.BOLD) / 2, -48, 6, Font.Weight.BOLD, t.accent2());
+                }
             }
-        }
 
-        if (hotbar.on()) {
-            int sel = p.getInventory().getSelectedSlot();
-            float cell = 18 * s, gap = 2 * s;
-            float total = 9 * cell + 8 * gap;
-            float hx = sw / 2 - total / 2, hy = y + 21 * s;
-            for (int i = 0; i < 9; i++) {
-                float cx = hx + i * (cell + gap);
-                boolean on = i == sel;
-                if (on) Gfx.round(cx - 1 * s, hy - 1 * s, cell + 2 * s, cell + 2 * s, 4 * s, Colors.withAlpha(t.accent(), 0xD0));
-                Gfx.round(cx, hy, cell, cell, 3 * s, on ? 0x33FFFFFF : 0x1AFFFFFF);
-                ItemStack st = p.getInventory().getStack(i);
-                if (!st.isEmpty()) {
-                    Gfx.item(st, cx + 1.5f * s, hy + 1.5f * s, cell - 3 * s);
-                    if (style.is("Segmented")) {
+            if (health.on()) {
+                float hp = p.getHealth() + p.getAbsorptionAmount();
+                float max = Math.max(1f, p.getMaxHealth() + p.getAbsorptionAmount());
+                bar(-96, -31, 92, 6, Math.min(1f, hp / max), 0xFFF2555A, 0xFFFF8A5C, t);
+                if (numbers.on()) {
+                    Gfx.text(String.format(java.util.Locale.ROOT, "%.0f", hp), -92, -30.5f, 6, Font.Weight.BOLD, 0xFFFFFFFF);
+                }
+            }
+            if (food.on()) {
+                int fd = p.getHungerManager().getFoodLevel();
+                bar(4, -31, 92, 6, Math.min(1f, fd / 20f), 0xFFC98A3C, 0xFFFFD27A, t);
+                if (numbers.on()) {
+                    String label = Integer.toString(fd);
+                    Gfx.text(label, 96 - Gfx.width(label, 6, Font.Weight.BOLD), -30.5f, 6, Font.Weight.BOLD, 0xFFFFFFFF);
+                }
+            }
+
+            if (hotbar.on()) {
+                int sel = p.getInventory().getSelectedSlot();
+                float cell = 18, gap = 2, total = 9 * cell + 8 * gap;
+                float hx = -total / 2, hy = -24;
+                for (int i = 0; i < 9; i++) {
+                    float cx = hx + i * (cell + gap);
+                    boolean on = i == sel;
+                    if (on) Gfx.round(cx - 1.5f, hy - 1.5f, cell + 3, cell + 3, 4, Colors.withAlpha(t.accent(), 0xD0));
+                    Gfx.round(cx, hy, cell, cell, 3, on ? 0x33FFFFFF : 0x1AFFFFFF);
+                    ItemStack st = p.getInventory().getStack(i);
+                    if (!st.isEmpty()) {
+                        Gfx.item(st, cx + 1.5f, hy + 1.5f, cell - 3);
                         int count = st.getCount();
                         if (count > 1) {
                             String c = Integer.toString(count);
-                            Gfx.text(c, cx + cell - 2 * s - Gfx.width(c, Gfx.SMALL * s * 0.8f, Font.Weight.BOLD),
-                                    hy + cell - 6 * s, Gfx.SMALL * s * 0.8f, Font.Weight.BOLD, 0xFFFFFFFF);
+                            Gfx.text(c, cx + cell - 1.5f - Gfx.width(c, 5, Font.Weight.BOLD), hy + cell - 6.5f, 5, Font.Weight.BOLD, 0xFFFFFFFF);
                         }
                     }
                 }
             }
+        } finally {
+            Gfx.popPlace();
         }
     }
 

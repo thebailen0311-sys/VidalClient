@@ -1,5 +1,5 @@
 {
-  "version": "1.0.5",
-  "notes": "Hold and place-bind chips now respond to clicks, Auto Totem does one inventory action per tick (fixes MultiActions), sprint is cancelled while inventory is open, and Auto Crystal uses silent aim so the camera never moves.",
-  "jar": "dist/vanta-1.0.5.jar"
+  "version": "1.0.6",
+  "notes": "Custom Bars is now anchored to the vanilla hotbar geometry with an opaque plate so the old bars are actually covered, and the knife swing styles (Slash, Spin, Stab, Flip, Whirl) move far more, with an always-on idle float.",
+  "jar": "dist/vanta-1.0.6.jar"
 }

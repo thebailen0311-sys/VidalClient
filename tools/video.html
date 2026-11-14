@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>reference frames</title>
+<style>
+  html,body{margin:0;background:#111;color:#ddd;font:13px monospace}
+  #status{padding:8px}
+  canvas{display:block}
+</style></head>
+<body>
+<div id="status">loading…</div>
+<canvas id="sheet" width="960" height="720"></canvas>
+<script>
+const src = "corzclient%20-%207707699626308144406.mp4";
+const v = document.createElement("video");
+v.muted = true; v.playsInline = true; v.preload = "auto";
+const sheet = document.getElementById("sheet");
+const g = sheet.getContext("2d");
+const status = document.getElementById("status");
+const COLS = 3, ROWS = 3, N = COLS * ROWS;
+let times = [];
+v.addEventListener("error", () => {
+  status.textContent = "video error: " + (v.error ? v.error.code + " " + v.error.message : "unknown");
+});
+v.addEventListener("loadedmetadata", async () => {
+  status.textContent = "duration " + v.duration.toFixed(1) + "s, " + v.videoWidth + "x" + v.videoHeight;
+  const step = v.duration / (N + 1);
+  times = Array.from({length: N}, (_, i) => step * (i + 1));
+  const cw = sheet.width / COLS, ch = sheet.height / ROWS;
+  for (let i = 0; i < N; i++) {
+    await new Promise(res => {
+      const onSeek = () => { v.removeEventListener("seeked", onSeek); res(); };
+      v.addEventListener("seeked", onSeek);
+      v.currentTime = times[i];
+    });
+    const col = i % COLS, row = Math.floor(i / COLS);
+    g.drawImage(v, col * cw, row * ch, cw, ch);
+    g.fillStyle = "#000a"; g.fillRect(col * cw, row * ch, 54, 16);
+    g.fillStyle = "#0f0"; g.fillText(times[i].toFixed(1) + "s", col * cw + 4, row * ch + 12);
+  }
+  status.textContent = "done: " + N + " frames, duration " + v.duration.toFixed(1) + "s";
+  window.__framesReady = true;
+});
+v.src = src;
+</script>
+</body></html>

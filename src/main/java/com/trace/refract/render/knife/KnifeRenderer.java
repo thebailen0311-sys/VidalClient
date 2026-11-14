@@ -91,17 +91,36 @@ public final class KnifeRenderer implements SpecialModelRenderer<Void> {
                 String style = cos == null ? "Slash" : cos.swingStyle.get();
                 float sw = (float) Math.sin(Math.PI * swing);
                 float e = Anim.easeInOutCubic(swing);
+                // Big, readable motion: the whole blade travels as well as rotating, so a swing is obvious at a
+                // glance instead of a small flick near the grip.
                 switch (style) {
-                    case "Spin" -> about(m, 5, 5, new Quaternionf().rotateZ((float) Math.toRadians(-360 * e)));               // full turn around the grip
-                    case "Stab" -> { m.translate(6 * sw, 6 * sw, 0); about(m, 5, 5, new Quaternionf().rotateZ((float) Math.toRadians(-12 * sw))); } // thrust along the blade
-                    case "Flip" -> { m.translate(0, 7 * sw, 0); about(m, 9, 9, new Quaternionf().rotateAxis((float) Math.toRadians(360 * e), -0.7071f, 0.7071f, 0)); } // end over end
-                    case "Whirl" -> about(m, 5, 5, new Quaternionf().rotateY((float) Math.toRadians(720 * e)).rotateZ((float) Math.toRadians(-30 * sw))); // two-turn flourish
-                    default -> {
+                    case "Spin" -> {
+                        m.translate(0, 2.5f * sw, -1.5f * sw);
+                        about(m, 5, 5, new Quaternionf().rotateZ((float) Math.toRadians(-360 * e)));
+                    }
+                    case "Stab" -> {
+                        m.translate(11 * sw, 8 * sw, -6 * sw);
+                        about(m, 3, 3, new Quaternionf().rotateZ((float) Math.toRadians(-24 * sw)));
+                    }
+                    case "Flip" -> {
+                        m.translate(0, 11 * sw, -3 * sw);
+                        about(m, 9, 9, new Quaternionf().rotateAxis((float) Math.toRadians(360 * e), -0.7071f, 0.7071f, 0));
+                    }
+                    case "Whirl" -> {
+                        m.translate(0, 3 * sw, -2 * sw);
+                        about(m, 5, 5, new Quaternionf().rotateY((float) Math.toRadians(720 * e)).rotateZ((float) Math.toRadians(-55 * sw)));
+                    }
+                    default -> { // Slash: a wide 150-degree arc out of the hand and back
                         float flick = (float) Math.sin(Math.PI * Math.min(1, swing * 1.6f));
-                        about(m, 5, 5, new Quaternionf().rotateZ((float) Math.toRadians(-80 * flick + 18 * sw * sw)).rotateX((float) Math.toRadians(22 * sw)));
+                        m.translate(-3 * sw, 4 * sw, -4 * sw);
+                        about(m, 5, 5, new Quaternionf()
+                                .rotateZ((float) Math.toRadians(-150 * flick + 26 * sw * sw))
+                                .rotateX((float) Math.toRadians(42 * sw)));
                     }
                 }
-                about(m, 5, 5, new Quaternionf().rotateZ((float) Math.toRadians(2.2 * Math.sin(now * 1.7))));
+                // Idle float, always on: the knife breathes in the hand so it never looks frozen.
+                m.translate(0, 0.35f * (float) Math.sin(now * 1.9), 0);
+                about(m, 5, 5, new Quaternionf().rotateZ((float) Math.toRadians(2.8 * Math.sin(now * 1.7))));
             }
             float t = (now - inspectStart) / mesh.inspectSeconds;
             if (t >= 0 && t < 1) {
