@@ -76,16 +76,20 @@ public class AutoCrystal extends Module {
         return isEnabled() && timer > 0 ? String.valueOf(timer) : null;
     }
 
-    /** Points the player at a world position; the rotation packet goes out on this tick, the action on the next. */
+    /**
+     * Turns toward a world position without touching the camera: the rotation is sent silently, the way the game
+     * sends mouse look, so your view stays where you put it. Call it every tick while settling.
+     */
     private static void aimAt(net.minecraft.client.MinecraftClient mc, Vec3d target) {
         if (mc.player == null) return;
-        double dx = target.x - mc.player.getX(), dz = target.z - mc.player.getZ();
-        double dy = target.y - mc.player.getEyeY();
-        double flat = Math.sqrt(dx * dx + dz * dz);
-        // Yaw must stay inside -180..180: a raw atan2 result can land outside that range and the server's aim
-        // check reports it (AimModulo360) even though the camera looks correct locally.
-        mc.player.setYaw(net.minecraft.util.math.MathHelper.wrapDegrees((float) (Math.toDegrees(Math.atan2(dz, dx)) - 90.0)));
-        mc.player.setPitch((float) -Math.toDegrees(Math.atan2(dy, flat)));
+        com.trace.refract.util.Rotations.aim(
+                com.trace.refract.util.Rotations.yawTo(target),
+                com.trace.refract.util.Rotations.pitchTo(target), 180f, true);
+    }
+
+    /** True once the silently sent rotation is actually pointing at {@code at}. */
+    private static boolean settled(Vec3d at) {
+        return com.trace.refract.util.Rotations.onTarget(at, 10f);
     }
 
     @Override public void onTick() {
@@ -116,12 +120,15 @@ public class AutoCrystal extends Module {
             if (Combat.eyeDistance(crystal) > breakRange.get() + 1.5) return;
             // Look at the crystal before hitting it. Swinging while your crosshair points somewhere else is an
             // instant hitbox flag: the server checks the attack ray against the entity's box.
+            Vec3d cc = crystal.getBoundingBox().getCenter();
             if (turnedToCrystal != crystal.getId()) {
                 turnedToCrystal = crystal.getId();
-                aimAt(mc, crystal.getBoundingBox().getCenter());
+                aimAt(mc, cc);
                 timer = 1; // the turn goes out this tick, the swing on the next
                 return;
             }
+            aimAt(mc, cc);
+            if (!settled(cc)) { timer = 0; return; } // keep easing; never swing mid-turn
             turnedToCrystal = -1;
             Combat.attack(crystal);
             timer = crystalDelay.asInt();
@@ -133,8 +140,10 @@ public class AutoCrystal extends Module {
             if (!autoObsidian.on() || Combat.reachTo(base) > placeRange.get()) return;
             // One tick between the swap and the placement, so the held-item change always arrives first.
             if (!Combat.holding(Items.OBSIDIAN)) { Combat.holdItem(Items.OBSIDIAN); timer = 1; return; }
-            // Look at the face we are about to place on. A placement whose face is not in the player's view is
-            // rejected by the server (and is exactly what the anticheat reports as a bad block placement).
+            // Look at the face we are about to place on, silently, and only place once that rotation has been sent.
+            Vec3d face = support.toCenterPos();
+            aimAt(mc, face);
+            if (!settled(face)) return;
             boolean placed = Combat.placeAgainst(support, side);
             if (placed) {
                 lastPlaced = base;
@@ -147,6 +156,9 @@ public class AutoCrystal extends Module {
         if (mc.world.getBlockState(base).getBlock() == Blocks.OBSIDIAN) {
             if (Combat.reachTo(base) > placeRange.get() + 1.0) return;
             if (!Combat.holding(Items.END_CRYSTAL)) { Combat.holdItem(Items.END_CRYSTAL); timer = 1; return; }
+            Vec3d at = base.toCenterPos();
+            aimAt(mc, at);
+            if (!settled(at)) return;
             boolean used = Combat.useBlock(base, Direction.UP);
             if (used) timer = crystalDelay.asInt();
         }

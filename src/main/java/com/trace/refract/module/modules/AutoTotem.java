@@ -79,6 +79,9 @@ public class AutoTotem extends Module {
         if (!offhandOk && low && timer == 0) {
             if (hoverTotem.on() && hoveredTotem() != null) {
                 Slot s = hoveredTotem();
+                // One inventory action per tick; opening the screen or a second swap in the same tick is what the
+                // server reports as multiple actions.
+                if (!Combat.inventoryAllowed()) { timer = 1; return; }
                 mc.interactionManager.clickSlot(((HandledScreen<?>) mc.currentScreen).getScreenHandler().syncId,
                         s.id, 40, SlotActionType.SWAP, mc.player);
                 timer = delay.asInt();
@@ -87,7 +90,7 @@ public class AutoTotem extends Module {
                 if (slot >= 0) {
                     Combat.toOffhand(slot);
                     timer = delay.asInt();
-                    if (openInventory.on() && mc.currentScreen == null) {
+                    if (openInventory.on() && mc.currentScreen == null && !Combat.holdingWeapon()) {
                         mc.setScreen(new InventoryScreen(mc.player));
                         opened = true;
                         closeTimer = 0;

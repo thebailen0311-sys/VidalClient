@@ -138,6 +138,7 @@ public final class Combat {
     /** Swaps an inventory slot into the off hand (button 40 is the off-hand button on the player screen). */
     public static boolean toOffhand(int invIndex) {
         if (mc.player == null || mc.interactionManager == null || invIndex < 0) return false;
+        if (!inventoryAllowed()) return false;
         beginInternal();
         try {
             mc.interactionManager.clickSlot(mc.player.playerScreenHandler.syncId, handlerSlot(invIndex), 40,
@@ -149,6 +150,24 @@ public final class Combat {
     }
 
     // ------------------------------------------------------------------ acting
+
+    /** Unit vector for a yaw/pitch pair, matching the game's own convention. */
+    public static Vec3d dirFrom(float yaw, float pitch) {
+        float y = yaw * MathHelper.RADIANS_PER_DEGREE, p = pitch * MathHelper.RADIANS_PER_DEGREE;
+        float cp = MathHelper.cos(p);
+        return new Vec3d(-MathHelper.sin(y) * cp, -MathHelper.sin(p), MathHelper.cos(y) * cp);
+    }
+
+    /** One inventory click per tick: Grim's MultiActions check reports two in the same tick. */
+    private static int inventoryTick = -1;
+
+    public static boolean inventoryAllowed() {
+        if (mc.player == null) return false;
+        int now = mc.player.age;
+        if (now == inventoryTick) return false;
+        inventoryTick = now;
+        return true;
+    }
 
     public static void attack(Entity e) {
         if (mc.player == null || mc.interactionManager == null || e == null) return;
@@ -230,11 +249,18 @@ public final class Combat {
         return aimedBlock(4.5);
     }
 
-    /** Straight raycast from the eyes along the facing direction, up to {@code reach} blocks. */
+    /**
+     * Straig ht raycast from the eyes along the direction the server is being told we face. When silent aim is
+     * active that is the silent rotation, not the camera, so a placement lines up with the rotation packet that
+     * accompanies it.
+     */
     public static BlockHitResult aimedBlock(double reach) {
         if (mc.player == null || mc.world == null) return null;
         Vec3d eye = mc.player.getEyePos();
-        Vec3d end = eye.add(mc.player.getRotationVec(1f).multiply(reach));
+        Vec3d look = com.trace.refract.util.Rotations.active()
+                ? dirFrom(Rotations.currentYaw(), Rotations.currentPitch())
+                : mc.player.getRotationVec(1f);
+        Vec3d end = eye.add(look.multiply(reach));
         HitResult hit = mc.world.raycast(new net.minecraft.world.RaycastContext(eye, end,
                 net.minecraft.world.RaycastContext.ShapeType.OUTLINE,
                 net.minecraft.world.RaycastContext.FluidHandling.NONE, mc.player));

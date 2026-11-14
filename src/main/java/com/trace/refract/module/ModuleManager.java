@@ -110,6 +110,11 @@ public final class ModuleManager {
 
     public static void tick(MinecraftClient mc) {
         pollKeys(mc);
+        // Sprinting with an inventory open is a server-side speed violation; vanilla stops it, modules must too.
+        if (mc.currentScreen instanceof net.minecraft.client.gui.screen.ingame.HandledScreen && mc.player != null
+                && mc.player.isSprinting()) {
+            mc.player.setSprinting(false);
+        }
         com.trace.refract.util.Prof.tick();
         for (Module m : MODULES) {
             long t0 = System.nanoTime();

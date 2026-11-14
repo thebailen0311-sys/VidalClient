@@ -944,18 +944,28 @@ public class ClickGuiScreen extends Screen {
         float[] lc = toLocal(click.x(), click.y());
         float x = lc[0], y = lc[1];
         int button = click.button();
-        // While listening, the next mouse button becomes the bind (keyboard keys are caught in keyPressed).
-        if (listening != null || listeningPlace) {
-            if (listening != null) listening.key = Module.mouseKey(button);
-            else if (ModuleManager.anchorMacro != null) ModuleManager.anchorMacro.placeKey = Module.mouseKey(button);
-            listening = null;
-            listeningPlace = false;
-            Sfx.click();
-            return true;
-        }
+        // Resolve the click first: while a bind is armed the next click is normally the new key, but a click that
+        // lands on another control (the hold switch, the place bind, close) must act on that control instead of
+        // being eaten as a mouse bind.
+        boolean armed = listening != null || listeningPlace;
         Hit hit = hitAt(x, y, HitType.CATEGORY, HitType.GENERAL, HitType.SWITCH, HitType.CARD, HitType.SEARCH, HitType.DIM, HitType.CLOSE,
                 HitType.MOD_TOGGLE, HitType.BOOL, HitType.NUMBER, HitType.MODE_PREV, HitType.MODE_NEXT, HitType.MODE_SEG, HitType.BIND,
+                HitType.BIND_HOLD, HitType.BIND_PLACE,
                 HitType.THEME, HitType.BLOCK_SEARCH, HitType.BLOCK_ADD, HitType.BLOCK_COLOR, HitType.BLOCK_REMOVE, HitType.DRAWER_AREA, HitType.DRAG);
+        if (armed) {
+            boolean control = hit != null && (hit.type() == HitType.BIND || hit.type() == HitType.BIND_HOLD
+                    || hit.type() == HitType.BIND_PLACE || hit.type() == HitType.CLOSE || hit.type() == HitType.MOD_TOGGLE);
+            if (!control) {
+                if (listening != null) listening.key = Module.mouseKey(button);
+                else if (ModuleManager.anchorMacro != null) ModuleManager.anchorMacro.placeKey = Module.mouseKey(button);
+                listening = null;
+                listeningPlace = false;
+                Sfx.click();
+                return true;
+            }
+            listening = null;
+            listeningPlace = false;
+        }
         searchFocus = hit != null && hit.type() == HitType.SEARCH;
         if (hit == null || (hit.type() != HitType.BLOCK_SEARCH && hit.type() != HitType.BLOCK_ADD)) blockFocus = null;
         if (hit != null && hit.type() == HitType.BLOCK_SEARCH) blockFocus = (com.trace.refract.setting.BlockListSetting) hit.a();

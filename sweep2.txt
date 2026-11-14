@@ -1,0 +1,19 @@
+##### crystal #####
+[07:39:57] [Render thread/INFO] (Vanta) [livetest] RESULT spec=crystal finished, modules exercised=1 health=20.0 onGround=true
+RefractTest failed Timer (x1) 
+RefractTest failed Timer (x2) 
+RefractTest failed Timer (x3) 
+RefractTest failed Timer (x4) 
+##### totem #####
+[07:41:00] [Render thread/INFO] (Vanta) [livetest] RESULT spec=totem finished, modules exercised=1 health=20.0 onGround=true
+RefractTest failed Timer (x1) 
+RefractTest failed Timer (x2) 
+RefractTest failed Timer (x3) 
+RefractTest failed Timer (x4) 
+##### tbot #####
+[07:42:02] [Render thread/INFO] (Vanta) [livetest] RESULT spec=tbot finished, modules exercised=2 health=20.0 onGround=true
+RefractTest failed Timer (x2) 
+RefractTest failed Timer (x3) 
+RefractTest failed Timer (x4) 
+RefractTest failed TimerLimit (x2) 
+DONE
