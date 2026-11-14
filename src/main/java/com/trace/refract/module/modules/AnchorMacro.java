@@ -85,8 +85,12 @@ public class AnchorMacro extends Module {
         return mc.world != null && mc.world.getRegistryKey() == World.NETHER;
     }
 
+    /**
+     * Turns toward {@code at} silently: the rotation rides in the movement packet, the camera stays where the
+     * player put it. A visible turn here was moving the view (and pushing the player around) mid-macro.
+     */
     private void lookAt(Vec3d at) {
-        Rotations.aim(Rotations.yawTo(at), Rotations.pitchTo(at), snapSpeed.asFloat(), false);
+        Rotations.aim(Rotations.yawTo(at), Rotations.pitchTo(at), snapSpeed.asFloat(), true);
     }
 
     @Override public void onTick() {

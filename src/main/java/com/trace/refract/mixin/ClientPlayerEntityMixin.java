@@ -25,8 +25,10 @@ public abstract class ClientPlayerEntityMixin {
         ClientPlayerEntity self = (ClientPlayerEntity) (Object) this;
         refract$yaw = self.getYaw();
         refract$pitch = self.getPitch();
-        self.setYaw(Rotations.yaw());
-        self.setPitch(Rotations.pitch());
+        // The driver tracks yaw continuously (it can pass 180 while turning the short way round). The packet must
+        // carry it wrapped into -180..180 or the server's aim check reports AimModulo360 on every single aim.
+        self.setYaw(net.minecraft.util.math.MathHelper.wrapDegrees(Rotations.yaw()));
+        self.setPitch(net.minecraft.util.math.MathHelper.clamp(Rotations.pitch(), -90f, 90f));
         refract$swapped = true;
     }
 

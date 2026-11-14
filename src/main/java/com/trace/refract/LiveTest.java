@@ -153,7 +153,7 @@ public final class LiveTest {
             // Summoned in front of and ABOVE the player, so it lands on the surface instead of inside terrain.
             // Only the combat specs get a dummy: one parked in front of the player blocks the crosshair and is
             // exactly where the placement modules need to work, which ruined those runs.
-            if (SPEC.equals("tbot") || SPEC.equals("stap")) {
+            if (SPEC.equals("tbot") || SPEC.equals("stap") || SPEC.equals("aim")) {
                 cmd(mc, "kill @e[type=minecraft:zombie]");
                 cmd(mc, "execute at @s anchored eyes run summon minecraft:zombie ^ ^ ^2 {NoAI:1b,NoGravity:1b,Silent:1b,PersistenceRequired:1b,Tags:[\"ltarget\"]}");
             }
@@ -302,6 +302,10 @@ public final class LiveTest {
                     }
                     log("base t=" + ticks + " n=" + ModuleManager.baseFinder.candidates.size() + " [" + sb + "]");
                 }
+            }
+            case "aim" -> {
+                if (ticks == 20) { cmd(mc, "gamemode creative"); enable("aim assist", true); log("aim assist on"); }
+                if (ticks > 40 && ticks % 40 == 0) log("aim alive t=" + ticks + " yaw=" + mc.player.getYaw() + " pitch=" + mc.player.getPitch());
             }
             case "look" -> {
                 if (ticks == 20) {

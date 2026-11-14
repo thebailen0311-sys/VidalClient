@@ -5,19 +5,24 @@ import com.trace.refract.module.Module;
 import com.trace.refract.setting.BoolSetting;
 import com.trace.refract.setting.NumberSetting;
 import com.trace.refract.util.Combat;
+import com.trace.refract.util.Rotations;
 import net.minecraft.block.Blocks;
 import net.minecraft.entity.decoration.EndCrystalEntity;
 import net.minecraft.item.Items;
-import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Vec3d;
 import net.minecraft.util.math.Direction;
+import net.minecraft.util.math.Vec3d;
 
 /**
- * Crystal cycle at the block you are looking at: place obsidian, put a crystal on it, break the crystal, repeat
- * while the bind is held. Bind it in hold mode and it runs only for as long as you hold the button; let go, look
- * at another block, press again. Placement and breaking are ordinary client interactions with configurable
- * tick delays, so the rate stays inside what a player can physically click.
+ * Crystal cycle on one latched block: obsidian, crystal, break, repeat.
+ *
+ * <p>Everything is a state machine with exactly one action per state, and the spot is chosen <b>once</b> per cycle.
+ * The previous version re-derived the target from the crosshair every tick, so the moment obsidian existed the ray
+ * pointed at the new block and it went back to placing obsidian — the visible symptom being a rapid obsidian/crystal
+ * swap that also spammed the server with placements.
+ *
+ * <p>Rotations are silent and every action is gated on that rotation having settled, so the camera never moves and a
+ * placement never travels in the same tick as the turn that made it valid.
  */
 public class AutoCrystal extends Module {
     public final NumberSetting placeRange = add(new NumberSetting("Place Range", 4.4, 2, 6, 0.1, "m"));
@@ -27,140 +32,138 @@ public class AutoCrystal extends Module {
     public final BoolSetting autoObsidian = add(new BoolSetting("Place Obsidian", true));
     public final BoolSetting swapBack = add(new BoolSetting("Swap Back", true));
 
-    private int timer, originalSlot = -1;
-    /**
-     * The spot this cycle is working on, latched when the cycle starts. Re-deriving it from the crosshair every
-     * tick made the target walk one block up each placement: once obsidian is there you are looking at the new
-     * block, so its top face is a fresh replaceable block, and the module stacked obsidian forever without ever
-     * placing a crystal.
-     */
+    private enum Step { PICK, SWAP_OBSIDIAN, PLACE_OBSIDIAN, WAIT_OBSIDIAN, SWAP_CRYSTAL, PLACE_CRYSTAL, BREAK, DONE }
+
+    private Step step = Step.PICK;
+    private int timer, wait, originalSlot = -1;
+    /** Latched for the whole cycle: the block the crystal goes on top of. */
     private BlockPos base;
-    /**
-     * Ticks spent waiting for the server to actually spawn the crystal we asked for. Retrying before it arrives
-     * fired a placement every two ticks: the server rejected the duplicates and flagged the placement stream.
-     */
-    private int waiting;
-    /** The face the player has already been turned towards, so every placement is preceded by its rotation. */
-    /**
-     * Ordering state. The client sends its rotation during its own tick, before modules run, so a rotation set
-     * here only reaches the server on the NEXT tick. Interacting in the same tick as the turn therefore reaches
-     * the server tagged with the previous look direction, which is exactly what a post-placement check rejects.
-     * So: turn on one tick, act on the next.
-     */
-    private BlockPos turnedTo;
-    private int turnedToCrystal = -1;
-    /** The spot we just filled with obsidian; it stays the cycle base while we work on its crystal. */
-    private BlockPos lastPlaced;
+    private BlockPos support;
+    private Direction side = Direction.UP;
 
     public AutoCrystal() {
         super("Auto Crystal", "Places obsidian, drops a crystal on it and breaks it at your chosen speed while held.", Category.COMBAT);
     }
 
     @Override public void onEnable() {
-        timer = 0;
+        timer = wait = 0;
         base = null;
-        originalSlot = mc.player == null ? -1 : mc.player.getInventory().getSelectedSlot();
+        support = null;
+        step = Step.PICK;
+        if (mc.player != null) originalSlot = mc.player.getInventory().getSelectedSlot();
     }
 
     @Override public void onDisable() {
         base = null;
-        turnedTo = null;
-        turnedToCrystal = -1;
-        lastPlaced = null;
+        support = null;
+        step = Step.PICK;
+        Rotations.stop();
         if (swapBack.on() && mc.player != null && originalSlot >= 0 && originalSlot < 9) {
             mc.player.getInventory().setSelectedSlot(originalSlot);
         }
     }
 
-    @Override public String suffix() {
-        return isEnabled() && timer > 0 ? String.valueOf(timer) : null;
+    @Override public String suffix() { return isEnabled() && timer > 0 ? String.valueOf(timer) : null; }
+
+    private static void aimAt(Vec3d at) {
+        Rotations.aim(Rotations.yawTo(at), Rotations.pitchTo(at), 180f, true);
     }
 
-    /**
-     * Turns toward a world position without touching the camera: the rotation is sent silently, the way the game
-     * sends mouse look, so your view stays where you put it. Call it every tick while settling.
-     */
-    private static void aimAt(net.minecraft.client.MinecraftClient mc, Vec3d target) {
-        if (mc.player == null) return;
-        com.trace.refract.util.Rotations.aim(
-                com.trace.refract.util.Rotations.yawTo(target),
-                com.trace.refract.util.Rotations.pitchTo(target), 180f, true);
-    }
-
-    /** True once the silently sent rotation is actually pointing at {@code at}. */
-    private static boolean settled(Vec3d at) {
-        return com.trace.refract.util.Rotations.onTarget(at, 10f);
-    }
+    private static boolean settled(Vec3d at) { return Rotations.onTarget(at, 10f); }
 
     @Override public void onTick() {
         if (mc.player == null || mc.world == null || mc.interactionManager == null) return;
         if (timer > 0) { timer--; return; }
-
-        // Never act while another module is turning the player: the rotation would land in the wrong packet.
         if (Combat.internalAction()) return;
 
-        // The placement target has to come from the ray the player's look actually produces: aiming at a
-        // remembered face and hoping the ray lands there just loops forever when another block is in the way.
-        BlockHitResult hit = Combat.aimedBlock(placeRange.get() + 0.5);
-        if (hit == null) return;
-        BlockPos support = hit.getBlockPos();
-        Direction side = hit.getSide();
-        BlockPos aimed = support.offset(side);
-
-        // Follow the new aim unless it is the block we just placed: that one stays the cycle's base so the
-        // module moves on to the crystal instead of stacking obsidian on top of itself.
-        if (base == null || !base.equals(aimed)) {
-            if (lastPlaced == null || !lastPlaced.equals(base)) base = aimed;
-        }
-
-        // 1. An existing crystal on the spot is broken first, whatever the surface is.
-        EndCrystalEntity crystal = Combat.crystalNear(base, breakRange.get());
-
-        if (crystal != null) {
-            if (Combat.eyeDistance(crystal) > breakRange.get() + 1.5) return;
-            // Look at the crystal before hitting it. Swinging while your crosshair points somewhere else is an
-            // instant hitbox flag: the server checks the attack ray against the entity's box.
-            Vec3d cc = crystal.getBoundingBox().getCenter();
-            if (turnedToCrystal != crystal.getId()) {
-                turnedToCrystal = crystal.getId();
-                aimAt(mc, cc);
-                timer = 1; // the turn goes out this tick, the swing on the next
-                return;
+        switch (step) {
+            case PICK -> {
+                if (base == null && !pick()) return;
+                EndCrystalEntity crystal = Combat.crystalNear(base, breakRange.get());
+                if (crystal != null) { step = Step.BREAK; return; }
+                var state = mc.world.getBlockState(base);
+                if (state.getBlock() == Blocks.OBSIDIAN) { step = Step.SWAP_CRYSTAL; return; }
+                if (state.isReplaceable() && autoObsidian.on()) { step = Step.SWAP_OBSIDIAN; return; }
+                step = Step.DONE;
             }
-            aimAt(mc, cc);
-            if (!settled(cc)) { timer = 0; return; } // keep easing; never swing mid-turn
-            turnedToCrystal = -1;
-            Combat.attack(crystal);
-            timer = crystalDelay.asInt();
-            return;
-        }
-
-        // 2. Nothing there yet: obsidian first when configured.
-        if (mc.world.getBlockState(base).isReplaceable()) {
-            if (!autoObsidian.on() || Combat.reachTo(base) > placeRange.get()) return;
-            // One tick between the swap and the placement, so the held-item change always arrives first.
-            if (!Combat.holding(Items.OBSIDIAN)) { Combat.holdItem(Items.OBSIDIAN); timer = 1; return; }
-            // Look at the face we are about to place on, silently, and only place once that rotation has been sent.
-            Vec3d face = support.toCenterPos();
-            aimAt(mc, face);
-            if (!settled(face)) return;
-            boolean placed = Combat.placeAgainst(support, side);
-            if (placed) {
-                lastPlaced = base;
-                timer = obsidianDelay.asInt();
+            case SWAP_OBSIDIAN -> {
+                if (!Combat.holding(Items.OBSIDIAN)) {
+                    if (!Combat.holdItem(Items.OBSIDIAN)) { step = Step.DONE; return; }
+                    timer = 2; // the held item has to reach the server before the placement does
+                    return;
+                }
+                step = Step.PLACE_OBSIDIAN;
             }
-            return;
+            case PLACE_OBSIDIAN -> {
+                if (base == null || support == null) { step = Step.DONE; return; }
+                if (mc.world.getBlockState(base).getBlock() == Blocks.OBSIDIAN) { step = Step.PICK; return; }
+                if (Combat.reachTo(base) > placeRange.get()) { step = Step.DONE; return; }
+                Vec3d face = support.toCenterPos();
+                aimAt(face);
+                if (!settled(face)) return; // turn first, act on a later tick
+                if (Combat.placeAgainst(support, side)) {
+                    timer = obsidianDelay.asInt();
+                    wait = 0;
+                    step = Step.WAIT_OBSIDIAN;
+                } else {
+                    timer = 2;
+                }
+            }
+            case WAIT_OBSIDIAN -> {
+                if (mc.world.getBlockState(base).getBlock() == Blocks.OBSIDIAN) { step = Step.PICK; return; }
+                if (++wait > 20) { step = Step.DONE; return; } // the placement never arrived
+                timer = 2;
+            }
+            case SWAP_CRYSTAL -> {
+                if (!Combat.holding(Items.END_CRYSTAL)) {
+                    if (!Combat.holdItem(Items.END_CRYSTAL)) { step = Step.DONE; return; }
+                    timer = 2;
+                    return;
+                }
+                step = Step.PLACE_CRYSTAL;
+            }
+            case PLACE_CRYSTAL -> {
+                if (base == null) { step = Step.PICK; return; }
+                if (Combat.reachTo(base) > placeRange.get() + 1.0) { step = Step.DONE; return; }
+                Vec3d at = base.toCenterPos();
+                aimAt(at);
+                if (!settled(at)) return;
+                if (Combat.useBlock(base, Direction.UP)) {
+                    timer = crystalDelay.asInt();
+                    step = Step.PICK;
+                } else {
+                    timer = 2;
+                }
+            }
+            case BREAK -> {
+                EndCrystalEntity crystal = Combat.crystalNear(base, breakRange.get());
+                if (crystal == null) { step = Step.PICK; return; }
+                Vec3d c = crystal.getBoundingBox().getCenter();
+                aimAt(c);
+                if (!settled(c)) return;
+                Combat.attack(crystal);
+                timer = crystalDelay.asInt();
+                // Keep the spot: it is now obsidian, so the next PICK goes straight back to a crystal on the same
+                // block. Clearing it here made the module re-read the crosshair and walk one block per cycle.
+                step = Step.PICK;
+            }
+            case DONE -> { /* wait for the bind to be released */ }
         }
+    }
 
-        // 3. Obsidian in place: put a crystal on top of it.
-        if (mc.world.getBlockState(base).getBlock() == Blocks.OBSIDIAN) {
-            if (Combat.reachTo(base) > placeRange.get() + 1.0) return;
-            if (!Combat.holding(Items.END_CRYSTAL)) { Combat.holdItem(Items.END_CRYSTAL); timer = 1; return; }
-            Vec3d at = base.toCenterPos();
-            aimAt(mc, at);
-            if (!settled(at)) return;
-            boolean used = Combat.useBlock(base, Direction.UP);
-            if (used) timer = crystalDelay.asInt();
-        }
+    /** Chooses the spot under the crosshair once per cycle and keeps it. */
+    private boolean pick() {
+        var hit = Combat.aimedBlock(placeRange.get() + 0.5);
+        if (hit == null) return false;
+        BlockPos supportPos = hit.getBlockPos();
+        Direction face = hit.getSide();
+        BlockPos target = supportPos.offset(face);
+        if (Combat.reachTo(target) > placeRange.get()) return false;
+        var state = mc.world.getBlockState(target);
+        if (!state.isReplaceable() && state.getBlock() != Blocks.OBSIDIAN) return false;
+        support = supportPos;
+        side = face;
+        base = target;
+        return true;
     }
 }

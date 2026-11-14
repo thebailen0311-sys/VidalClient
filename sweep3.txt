@@ -1,0 +1,25 @@
+##### aim #####
+[08:13:42] [Render thread/INFO] (Vanta) [livetest] aim alive t=240 yaw=0.0 pitch=5.9957814
+[08:13:42] [Render thread/INFO] (Vanta) [livetest] RESULT spec=aim finished, modules exercised=1 health=20.0 onGround=true
+RefractTest failed Timer (x2) 
+RefractTest failed TimerLimit (x1) 
+RefractTest failed Timer (x3) 
+RefractTest failed Timer (x4) 
+RefractTest failed Timer (x5) 
+##### crystal #####
+[08:14:24] [Render thread/INFO] (Vanta) [livetest] t=240 obsidian=6 crystals=0 held=minecraft:diamond_sword
+[08:14:24] [Render thread/INFO] (Vanta) [livetest] RESULT spec=crystal finished, modules exercised=1 health=20.0 onGround=true
+RefractTest failed Timer (x5) 
+RefractTest failed Timer (x1) 
+RefractTest failed Timer (x2) 
+RefractTest failed Timer (x3) 
+RefractTest failed Timer (x4) 
+##### anchor #####
+[08:14:57] [Render thread/INFO] (Vanta) [livetest] anchor macro triggered
+[08:15:06] [Render thread/INFO] (Vanta) [livetest] RESULT spec=anchor finished, modules exercised=1 health=20.0 onGround=true
+RefractTest failed Timer (x5) 
+RefractTest failed Timer (x1) 
+RefractTest failed Timer (x2) 
+RefractTest failed Timer (x3) 
+RefractTest failed Timer (x4) 
+DONE
