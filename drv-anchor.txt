@@ -1,4 +1,0 @@
-[23:36:00] [Render thread/INFO] (Vanta) [livetest] joined, spec=anchor
-[23:36:00] [Render thread/INFO] (Vanta) [livetest] setup commands sent
-[23:36:02] [Render thread/INFO] (Vanta) [livetest] anchor macro triggered
-[23:36:11] [Render thread/INFO] (Vanta) [livetest] RESULT spec=anchor finished, modules exercised=1 health=6.2148905 onGround=true
