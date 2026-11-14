@@ -59,7 +59,10 @@ public final class Inspector {
 
     private static Target pick(float sw, float sh) {
         List<Target> all = new ArrayList<>();
-        if (ModuleManager.baseFinder.isEnabled()) for (BaseFinder.Candidate c : ModuleManager.baseFinder.candidates) all.add(base(c));
+        if (ModuleManager.baseFinder.isEnabled()) {
+            for (BaseFinder.Candidate c : ModuleManager.baseFinder.candidates) all.add(base(c));
+            for (BaseFinder.Lead l : ModuleManager.baseFinder.leads) all.add(lead(l));
+        }
         if (ModuleManager.susChunks.isEnabled()) for (SusChunks.Hit h : ModuleManager.susChunks.hits()) all.add(activity(h));
         Target best = null;
         double bestD = AIM_RADIUS * AIM_RADIUS;
@@ -75,6 +78,8 @@ public final class Inspector {
     private static Target base(BaseFinder.Candidate c) {
         List<String> lines = new ArrayList<>();
         lines.add(c.status + ": " + c.statusReason);
+        if (!c.route.isEmpty()) lines.add("Route: " + c.route);
+        if (c.lead != null) lines.add("Lead: " + c.tunnelText);
         var entries = new ArrayList<>(c.found.entrySet());
         entries.sort((a, b) -> Float.compare(c.weight.getOrDefault(b.getKey(), 0f), c.weight.getOrDefault(a.getKey(), 0f)));
         for (Map.Entry<String, Integer> e : entries) {
@@ -93,6 +98,17 @@ public final class Inspector {
         }
         return new Target(c.key, c.center, c.anchor, c.type, c.confidence, c.level.color, lines, value,
                 value == null ? null : vd + (vd.length() > 0 ? "  ·  " : "") + "contents unseen");
+    }
+
+    /** An old tunnel on its own: direction, what was dug and where to drop in. Not a base. */
+    private static Target lead(BaseFinder.Lead l) {
+        List<String> lines = new ArrayList<>();
+        lines.add(l.describe);
+        lines.add("Runs " + (l.axis == 0 ? "east–west" : "north–south") + " at Y " + l.floorY);
+        if (!l.route.isEmpty()) lines.add("Route: " + l.route);
+        lines.add("Enter at " + Fmt.xyz(l.from));
+        lines.add("Follow it to the far end: nothing confirmed yet");
+        return new Target(l.bounds, l.to.toCenterPos(), l.to, "Old tunnel", 0.5f, 0xFF38BDF8, lines, null, null);
     }
 
     private static Target activity(SusChunks.Hit h) {

@@ -21,6 +21,8 @@ public final class ModuleManager {
     public static GrowthEsp growthEsp;
     public static SurfaceFilter surfaceFilter;
     public static SoundLocator soundLocator;
+    public static SpawnerNotifier spawnerNotifier;
+    public static Relog relog;
     public static EntityFinder entityFinder;
     public static AutoHunter autoHunter;
     public static Triggerbot triggerbot;
@@ -68,6 +70,8 @@ public final class ModuleManager {
         susChunks = add(new SusChunks());
         growthEsp = add(new GrowthEsp());
         soundLocator = add(new SoundLocator());
+        spawnerNotifier = add(new SpawnerNotifier());
+        relog = add(new Relog());
         storageEsp = add(new StorageEsp());
         blockEsp = add(new BlockEsp());
         debrisFinder = add(new DebrisFinder());

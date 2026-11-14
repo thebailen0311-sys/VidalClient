@@ -9,6 +9,7 @@ import com.trace.refract.module.Module;
 import com.trace.refract.render.Esp;
 import com.trace.refract.scan.ChunkReport;
 import com.trace.refract.scan.Confidence;
+import com.trace.refract.scan.Tunnel;
 import com.trace.refract.scan.WorldScanner;
 import com.trace.refract.setting.BoolSetting;
 import com.trace.refract.setting.ModeSetting;
@@ -48,6 +49,15 @@ public class BaseFinder extends Module {
     public final BoolSetting tracers = add(new BoolSetting("Tracers", false));
     public final BoolSetting throughWalls = add(new BoolSetting("Through Walls", true));
     public final NumberSetting heatThreshold = add(new NumberSetting("Heat Threshold", 0.12, 0.02, 1.0, 0.01, ""));
+    /** Old mined corridors are the best pointer to a base that a client can actually read. */
+    public final BoolSetting tunnelLeads = add(new BoolSetting("Tunnel Leads", true));
+    public final BoolSetting freshTunnels = add(new BoolSetting("Include New Tunnels", false));
+    /** Screens are only readable when they stay short, so the weakest finds are hidden by default. */
+    public final NumberSetting minConfidence = add(new NumberSetting("Min Confidence", 30, 15, 80, 5, "%"));
+    public final NumberSetting maxFindings = add(new NumberSetting("Max Finds", 8, 2, 30, 1, ""));
+    public final BoolSetting livePrices = add(new BoolSetting("Live Prices", true));
+    public final NumberSetting minTunnel = add(new NumberSetting("Min Tunnel", 24, 12, 96, 4, "m"));
+    public final BoolSetting routes = add(new BoolSetting("Routes", true));
     public final BoolSetting alerts = add(new BoolSetting("Toasts", true));
     public final BoolSetting chat = add(new BoolSetting("Chat Alerts", false));
 
@@ -70,11 +80,38 @@ public class BaseFinder extends Module {
         /** What the base is for (Stash, Spawner Farm, Trading Hall...) and whether it looks intact. */
         public String type = "Base", status = "Unknown", statusReason = "";
         public int statusColor = 0xFF8A93A6;
+        /** The old corridor that leads here, when one was found: the direction to travel. */
+        public Lead lead;
+        public String tunnelText = "";
+        /** "NE 214m · 37m below" from the player to this base. */
+        public String route = "";
+        public double distance;
 
         public String summary(int max) { return ChunkReport.summarize(found, weight, max); }
     }
 
+    /** A merged run of old corridors: where to enter, which way it runs and what was dug through. */
+    public static final class Lead {
+        public Box bounds;
+        public BlockPos from, to;
+        public int length, floorY, axis;
+        public Tunnel.Kind kind = Tunnel.Kind.PICKAXE;
+        public boolean fresh;
+        public double distance;
+        public String route = "", describe = "";
+
+        public String kindLabel() {
+            return switch (kind) {
+                case AMETHYST_DRILL -> "amethyst drill";
+                case RAILED -> "railed shaft";
+                default -> "pickaxe tunnel";
+            };
+        }
+    }
+
     public final List<Candidate> candidates = new ArrayList<>();
+    /** Old corridors worth walking down, with the direction to them. These are leads, never bases on their own. */
+    public final List<Lead> leads = new ArrayList<>();
     /** Per-chunk suspicion, 0..1, for the Heat view and for square colours. */
     private final Map<Long, Float> heat = new HashMap<>();
     private final Set<Long> announced = new HashSet<>();
@@ -169,6 +206,7 @@ public class BaseFinder extends Module {
         if (sf != lastSurfaceFilter) { lastSurfaceFilter = sf; peakStorage.clear(); }
         prep();
         computeHeat();
+        if (tunnelLeads.on()) buildLeads(); else leads.clear();
         Map<Long, ChunkReport> hot = new HashMap<>();
         for (ChunkReport r : WorldScanner.reports()) {
             if (structureNoise(r) || (!r.loaded && !remember.on())) continue;
@@ -238,19 +276,70 @@ public class BaseFinder extends Module {
             // stone hut is scenery and used to slip through as a "Stash".
             int highValue = n(c, "Spawner") + n(c, "Beacon") + n(c, "Respawn Anchor")
                     + n(c, "Netherite Block") + n(c, "Rotated Deepslate");
-            // A griefed base has no containers left by definition: let a dug-out room with varied placed blocks, or an
-            // emptied cavity with scraps, through on its own evidence.
+            // A corridor that ends at this cluster is the best "how do I get there" evidence there is.
+            Lead lead = leadFor(c);
+            if (lead != null) {
+                c.lead = lead;
+                c.tunnelText = lead.describe;
+                c.found.merge("Old Tunnel", 1, Integer::sum);
+                c.weight.merge("Old Tunnel", 6f, Float::sum);
+                c.total += 2.5f;
+            }
+
+            // A griefed base has no containers left by definition: it needs a dug-out room with varied placed blocks,
+            // or a swept cavity with real building work in it. Two stray blocks in a cave used to pass here and
+            // became "Abandoned Builds": that is what filled the map with ruined random blocks.
             float builtSum = 0;
-            int placed = 0, dug = 0;
-            for (ChunkReport r : c.chunks) { builtSum += builtScore(r); placed += r.placements; dug += r.excavated; }
-            boolean griefedEvidence = (n(c, "Dug-out Room") > 0 && builtSum >= 3) || (dug >= 80 && placed >= 2 && builtSum > 0);
+            int placed = 0, dug = 0, builtTypes = 0;
+            for (ChunkReport r : c.chunks) { builtSum += builtScore(r); placed += r.placements; dug += r.excavated; builtTypes += r.builtTypes; }
+            boolean griefedEvidence = (n(c, "Dug-out Room") > 0 && builtSum >= 3)
+                    || (dug >= 80 && placed >= 8 && builtTypes >= 2 && builtSum > 0);
+            boolean playerOnly = n(c, "Beacon") > 0 || n(c, "Netherite Block") > 0 || n(c, "Shulker Box") > 0
+                    || n(c, "Respawn Anchor") > 0 || n(c, "Spawner") >= 3;
             if (containers < 3 && highValue == 0 && !griefedEvidence) continue;
+
+            // Two independent kinds of evidence, or one unmistakable player block. A single ruined wall, one chest in
+            // a hole, a cave with a couple of placed blocks: scenery, not a base.
+            int families = 0;
+            if (containers >= 3) families++;
+            if (n(c, "Dug-out Room") > 0) families++;
+            if (placed >= 6 && builtTypes >= 2) families++;
+            if (lead != null) families++;
+            if (playerOnly) families++;
+            if (families < 2) continue;
+
+            // Containers that never generate naturally. Dungeons and mineshafts only hold plain chests, so a cluster
+            // with no shulker/hopper/barrel and no tunnel pointing at it is scenery, however much cobblestone it has.
+            int playerStorage = n(c, "Shulker Box") + n(c, "Hopper") + n(c, "Trapped Chest")
+                    + n(c, "Beacon") + n(c, "Netherite Block") + n(c, "Respawn Anchor") + n(c, "Conduit");
+            int plainChests = n(c, "Chest") + n(c, "Barrel") + n(c, "Copper Chest");
+            boolean structHere = STRUCT_NEAR.contains(best.pos.toLong());
+
+            // Inside or next to a natural structure only unmistakable player evidence wins. Villages, mineshafts,
+            // dungeons, trial chambers and ruined portals are built from the same blocks a base is, and a dungeon is
+            // literally a cobblestone room with a spawner, a flat floor and two chests: every "griefed base" escape
+            // hatch that ignored this reported dungeons as bases.
+            if (structHere && !playerOnly && playerStorage < 2) continue;
+
+            // Containers that never generate naturally. A cluster with no shulker/hopper/barrel and no tunnel
+            // pointing at it is loot, not a stash. A genuinely emptied base needs two dug rooms of its own and must
+            // not sit inside a structure.
+            boolean emptiedBase = griefedEvidence && !structHere && n(c, "Dug-out Room") >= 2;
+            if (!playerOnly && lead == null && playerStorage < 2 && plainChests < 8 && !emptiedBase) continue;
+
             c.confidence = Confidence.fromScore(c.total, 16);
+            if (c.confidence < 0.15f) continue; // nothing under 15% is worth a square on the screen
+            if (c.confidence * 100f < minConfidence.get()) continue;
             c.heat = Math.min(1f, c.total / 26f);
             c.level = Confidence.level(c.confidence);
             c.key = best.pos.toLong();
             c.summary = c.summary(3);
             classify(c);
+            if (c.lead != null && (c.type.equals("Base") || c.type.equals("Sus Tunnel") || c.type.equals("Hidden Room")
+                    || c.type.equals("Griefed Base") || c.type.equals("Abandoned Build"))) {
+                c.type = c.lead.kind == Tunnel.Kind.AMETHYST_DRILL ? "Amethyst Drill Base" : "Tunnel Base";
+            }
+            route(c);
             c.title = c.type + "  ·  " + c.status + "  " + Math.round(c.confidence * 100) + "%";
             if (c.level.ordinal() >= minOrdinal()) out.add(c);
         }
@@ -258,8 +347,13 @@ public class BaseFinder extends Module {
         candidates.clear();
         candidates.addAll(out);
 
+        int announcedNow = 0;
         for (Candidate c : candidates) {
-            if (!announced.add(c.key)) continue;
+            if (announced.contains(c.key)) continue;
+            announced.add(c.key);
+            // A cluster of bases at once used to bury the screen in toasts; the list and the HUD already show them all.
+            if (c.level.ordinal() < Confidence.Level.MEDIUM.ordinal() || announcedNow >= 2) continue;
+            announcedNow++;
             String msg = String.format(Locale.ROOT, "%s (%s) at %s, %d%%", c.type, c.status, Fmt.xyz(c.anchor), Math.round(c.confidence * 100));
             if (alerts.on()) { Notifications.push("Base Finder", msg, c.level.color, 6000); com.trace.refract.util.Sfx.alert(); }
             com.trace.refract.util.FindingsLog.write("base " + Math.round(c.confidence * 100) + "%", Fmt.xyz(c.anchor), c.summary);
@@ -317,6 +411,7 @@ public class BaseFinder extends Module {
      * </ul>
      */
     private void classify(Candidate c) {
+        if (livePrices.on()) com.trace.refract.util.MarketPrices.maybeSync();
         int spawners = n(c, "Spawner"), shulk = n(c, "Shulker Box"), ender = n(c, "Ender Chest");
         int chests = n(c, "Chest") + n(c, "Trapped Chest") + n(c, "Barrel") + n(c, "Copper Chest");
         int redstone = n(c, "Observer") + n(c, "Comparator") + n(c, "Piston") + n(c, "Sticky Piston") + n(c, "Repeater")
@@ -327,9 +422,9 @@ public class BaseFinder extends Module {
         int strongStorage = spawners + shulk + ender;
         int rooms = n(c, "Dug-out Room");
         float built = 0;
-        int placements = 0, excavated = 0;
-        for (ChunkReport r : c.chunks) { built += builtScore(r); placements += r.placements; excavated += r.excavated; }
-        boolean swept = excavated >= 80 && placements >= 2; // emptied and abandoned: cavity, scraps, no storage
+        int placements = 0, excavated = 0, builtTypes = 0;
+        for (ChunkReport r : c.chunks) { built += builtScore(r); placements += r.placements; excavated += r.excavated; builtTypes += r.builtTypes; }
+        boolean swept = excavated >= 80 && placements >= 8 && builtTypes >= 2; // emptied and abandoned: cavity, real work, no storage
         int hoppers = n(c, "Hopper");
         int tnt = n(c, "TNT");
         int machinery = n(c, "Piston") + n(c, "Sticky Piston") + n(c, "Observer") + n(c, "Redstone Torch")
@@ -396,9 +491,14 @@ public class BaseFinder extends Module {
         } else if (sky * 3 >= loaded) {
             c.status = "Opened up"; c.statusColor = 0xFFFF9A3D;
             c.statusReason = Math.round(100.0 * sky / loaded) + "% open to the sky: dug into or griefed";
-        } else {
+        } else if (storage >= 3) {
             c.status = "Intact"; c.statusColor = 0xFF5CFFB0;
-            c.statusReason = "sealed underground, nothing missing";
+            c.statusReason = storage + " storage blocks, no sky access; contents unreadable";
+        } else {
+            // A sealed hole with nothing in it is not "intact": a client cannot see inside a chest either way, so
+            // only claim what the scan can actually prove.
+            c.status = "Sealed"; c.statusColor = 0xFF7FD1FF;
+            c.statusReason = storage == 0 ? "no sky access; no storage visible" : "no sky access; only " + storage + " container(s)";
         }
     }
 
@@ -433,6 +533,7 @@ public class BaseFinder extends Module {
         for (Candidate c : candidates) live.add(c.key);
         shownBox.keySet().retainAll(live);
         appearAt.keySet().retainAll(live);
+        if (tunnelLeads.on()) renderLeads(walls);
         if (esp.is("Heat")) { renderHeat(walls); renderHologram(walls); return; }
         boolean squares = esp.is("Squares") || esp.is("Both"), box = esp.is("Box") || esp.is("Both");
         Vec3d cam = mc.gameRenderer.getCamera().getCameraPos();
@@ -627,19 +728,176 @@ public class BaseFinder extends Module {
     @Override public void onHud(Theme t, float sw, float sh) {
         if (!labels.on() || mc.player == null) return;
         Vec3d eye = mc.gameRenderer.getCamera().getCameraPos();
-        int idx = 0;
-        for (Candidate c : candidates) {
+        // Nearest first, and only as many as the user asked for: an endless label list is unreadable.
+        java.util.List<Candidate> shown = new java.util.ArrayList<>(candidates);
+        shown.sort((a, b) -> Double.compare(eye.distanceTo(a.center), eye.distanceTo(b.center)));
+        int idx = 0, labelsDrawn = 0, maxLabels = Math.max(1, maxFindings.asInt());
+        for (Candidate c : shown) {
             double d = eye.distanceTo(c.center);
             if (d > Markers.FAR && farMarkers.on()) {
+                if (idx++ > 10) break;
                 Markers.draw(d, c.center, c.level.color, c.type, 1f);
-                idx++;
-                if (idx > 28) break;
                 continue;
             }
+            if (labelsDrawn >= maxLabels) continue;
             if (d > Markers.VERY_FAR) continue;
+            labelsDrawn++;
             if (holoBase != null && holoBase.key == c.key && holoShow.value > 0.05f) continue; // the hologram and card show it
-            String sub = Fmt.xyz(c.anchor) + "  ·  " + Fmt.dist(d);
+            String sub = Fmt.xyz(c.anchor) + "  ·  " + (c.route.isEmpty() ? Fmt.dist(d) : c.route);
             WorldLabels.draw(t, new Vec3d(c.center.x, c.bounds.maxY, c.center.z), c.title, sub, c.level.color, 1f, sw, sh, false);
+        }
+        // Leads: old tunnels with a direction, never dressed up as bases.
+        int li = 0;
+        for (Lead l : leads) {
+            if (li++ > 4) break;
+            Vec3d end = l.to.toCenterPos();
+            if (holoBase != null && holoBase.key == ChunkPos.toLong(l.to.getX() >> 4, l.to.getZ() >> 4)) continue;
+            WorldLabels.draw(t, new Vec3d(end.x, l.floorY + 1.5, end.z), "Old tunnel · " + l.kindLabel(),
+                    l.route + "  ·  " + l.length + "m " + (l.axis == 0 ? "E–W" : "N–S"), 0xFF38BDF8, 1f, sw, sh, false);
+        }
+    }
+
+    // ------------------------------------------------------------------ tunnels and directions
+
+    /** Bearing from the player to a point, in eight compass points. */
+    public static String bearing(double dx, double dz) {
+        double deg = Math.toDegrees(Math.atan2(dx, -dz));
+        String[] names = {"N", "NE", "E", "SE", "S", "SW", "W", "NW"};
+        return names[Math.floorMod((int) Math.round(deg / 45.0), 8)];
+    }
+
+    /** "NE 214m · 37m below" from the player to {@code at}. */
+    public static String routeTo(Vec3d at) {
+        if (mc.player == null) return "";
+        Vec3d p = mc.player.getEntityPos();
+        double dx = at.x - p.x, dz = at.z - p.z, dy = at.y - p.y;
+        String vert = dy < -2.5 ? "  ·  " + Math.round(-dy) + "m below" : dy > 2.5 ? "  ·  " + Math.round(dy) + "m above" : "  ·  level";
+        return bearing(dx, dz) + " " + Fmt.dist(Math.hypot(dx, dz)) + vert;
+    }
+
+    private void route(Candidate c) {
+        if (mc.player == null) return;
+        c.distance = mc.player.getEntityPos().distanceTo(c.center);
+        c.route = routes.on() ? routeTo(c.center) : "";
+    }
+
+    /** The nearest old corridor that ends within reach of a base's anchor. */
+    private Lead leadFor(Candidate c) {
+        Lead best = null;
+        double bd = 34 * 34;
+        for (Lead l : leads) {
+            double d = Math.min(sq(l.to, c.anchor.toCenterPos()), sq(l.from, c.anchor.toCenterPos()));
+            if (d < bd) { bd = d; best = l; }
+        }
+        return best;
+    }
+
+    private static double sq(BlockPos p, Vec3d v) {
+        double dx = p.getX() + 0.5 - v.x, dy = p.getY() + 0.5 - v.y, dz = p.getZ() + 0.5 - v.z;
+        return dx * dx + dy * dy + dz * dz;
+    }
+
+    /** Merges corridors that continue one another into one lead per route, then sorts them by distance. */
+    private void buildLeads() {
+        leads.clear();
+        if (mc.player == null) return;
+        List<Tunnel> pool = new ArrayList<>();
+        for (ChunkReport r : WorldScanner.reports()) {
+            // No structure skip here: a mineshaft corridor is 3 wide with wood floors and fences, which the strict
+            // 1-wide solid-walled test below already rejects, while skipping whole chunks also hid real tunnels that
+            // happened to run beneath a village or trial chamber.
+            for (Tunnel t : r.tunnels) {
+                // Length is judged after merging: a corridor is split into one run per chunk, so each piece is at
+                // most 16 blocks long on its own.
+                if (t.age == Tunnel.Age.FRESH && !freshTunnels.on()) continue;
+                pool.add(t);
+            }
+        }
+        if (pool.isEmpty()) return;
+        Vec3d eye = mc.player.getEntityPos();
+        boolean[] used = new boolean[pool.size()];
+        for (int i = 0; i < pool.size(); i++) {
+            if (used[i]) continue;
+            used[i] = true;
+            List<Tunnel> group = new ArrayList<>();
+            group.add(pool.get(i));
+            boolean grew = true;
+            while (grew) {
+                grew = false;
+                for (int j = 0; j < pool.size(); j++) {
+                    if (used[j]) continue;
+                    for (Tunnel g : group) if (joinable(g, pool.get(j))) { used[j] = true; group.add(pool.get(j)); grew = true; break; }
+                }
+            }
+            Lead lead = makeLead(group, eye);
+            if (lead.length >= minTunnel.asInt()) leads.add(lead);
+        }
+        leads.sort(Comparator.comparingDouble((Lead l) -> l.distance));
+    }
+
+    /** Two corridors continue each other when they share axis and height and their ends nearly touch. */
+    private static boolean joinable(Tunnel a, Tunnel b) {
+        if (a.axis != b.axis || Math.abs(a.floorY - b.floorY) > 1) return false;
+        Box x = a.bounds, y = b.bounds;
+        if (a.axis == 0) {
+            if (Math.abs((x.minZ + x.maxZ) - (y.minZ + y.maxZ)) > 4) return false;
+            return y.minX <= x.maxX + 8 && x.minX <= y.maxX + 8;
+        }
+        if (Math.abs((x.minX + x.maxX) - (y.minX + y.maxX)) > 4) return false;
+        return y.minZ <= x.maxZ + 8 && x.minZ <= y.maxZ + 8;
+    }
+
+    private Lead makeLead(List<Tunnel> group, Vec3d eye) {
+        Lead l = new Lead();
+        Tunnel first = group.get(0);
+        l.axis = first.axis;
+        l.floorY = first.floorY;
+        double minX = Double.MAX_VALUE, minZ = Double.MAX_VALUE, maxX = -Double.MAX_VALUE, maxZ = -Double.MAX_VALUE;
+        double minY = Double.MAX_VALUE, maxY = -Double.MAX_VALUE;
+        int longest = 0;
+        boolean amethyst = false, railed = false, fresh = false;
+        for (Tunnel t : group) {
+            minX = Math.min(minX, t.bounds.minX); maxX = Math.max(maxX, t.bounds.maxX);
+            minZ = Math.min(minZ, t.bounds.minZ); maxZ = Math.max(maxZ, t.bounds.maxZ);
+            minY = Math.min(minY, t.bounds.minY); maxY = Math.max(maxY, t.bounds.maxY);
+            longest = Math.max(longest, t.length);
+            amethyst |= t.kind == Tunnel.Kind.AMETHYST_DRILL;
+            railed |= t.kind == Tunnel.Kind.RAILED;
+            fresh |= t.age == Tunnel.Age.FRESH;
+        }
+        l.kind = amethyst ? Tunnel.Kind.AMETHYST_DRILL : railed ? Tunnel.Kind.RAILED : Tunnel.Kind.PICKAXE;
+        l.fresh = fresh;
+        l.bounds = new Box(minX, minY, minZ, maxX, maxY, maxZ);
+        l.length = Math.max(longest, (int) Math.round(l.axis == 0 ? maxX - minX : maxZ - minZ));
+        BlockPos a = l.axis == 0
+                ? new BlockPos((int) Math.floor(minX), l.floorY, (int) Math.floor((minZ + maxZ) / 2))
+                : new BlockPos((int) Math.floor((minX + maxX) / 2), l.floorY, (int) Math.floor(minZ));
+        BlockPos b = l.axis == 0
+                ? new BlockPos((int) Math.ceil(maxX) - 1, l.floorY, (int) Math.floor((minZ + maxZ) / 2))
+                : new BlockPos((int) Math.floor((minX + maxX) / 2), l.floorY, (int) Math.ceil(maxZ) - 1);
+        boolean aNear = sq(a, eye) <= sq(b, eye);
+        l.from = aNear ? a : b;
+        l.to = aNear ? b : a;
+        Vec3d end = l.to.toCenterPos();
+        l.distance = Math.hypot(end.x - eye.x, end.z - eye.z);
+        l.route = routes.on() ? routeTo(end) : "";
+        l.describe = l.kindLabel() + ", " + l.length + "m " + (l.axis == 0 ? "E–W" : "N–S") + (fresh ? ", new" : ", old");
+        return l;
+    }
+
+    /** Old corridors on screen: a translucent box along the tunnel, a beam at its far end and a route line to it. */
+    private void renderLeads(boolean walls) {
+        if (leads.isEmpty() || mc.player == null) return;
+        Vec3d eye = mc.gameRenderer.getCamera().getCameraPos();
+        int n = 0;
+        for (Lead l : leads) {
+            if (n++ > 10) break;
+            if (l.distance > 384) continue;
+            int col = l.kind == Tunnel.Kind.AMETHYST_DRILL ? 0xFFC77DFF : 0xFF38BDF8;
+            Esp.pretty(l.bounds, Colors.withAlpha(col, 0x88), walls);
+            Vec3d end = l.to.toCenterPos();
+            Esp.beam(end, l.floorY, l.floorY + 5, Colors.withAlpha(col, 0x90), 0x00FFFFFF, walls);
+            if (routes.on()) Esp.line(eye, end, Colors.withAlpha(col, 0x70), 1.25f, true);
         }
     }
 }

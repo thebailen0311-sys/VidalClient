@@ -51,6 +51,12 @@ public final class WorldScanner {
     private static final Map<Long, Long> LOAD_TIME = new HashMap<>();
     private static final Map<Long, Long> DIRTY = new HashMap<>();
     private static final Set<Long> FLOW_SEEN = new HashSet<>();
+    /**
+     * Blocks this session watched turn from solid into air underground, per chunk. This is the only honest way a
+     * client can tell a tunnel that already existed from one being dug right now: age is unobservable, edits are not.
+     * Corridors that overlap an edit here are marked {@link Tunnel.Age#FRESH} and kept out of base leads.
+     */
+    private static final Map<Long, Set<Long>> EDITS = new HashMap<>();
     private static int revision;
     private static double farthest;
     private static int farTick;
@@ -75,7 +81,8 @@ public final class WorldScanner {
 
     public static boolean active() {
         return ModuleManager.baseFinder.isEnabled() || ModuleManager.susChunks.isEnabled()
-                || ModuleManager.storageEsp.isEnabled() || ModuleManager.growthEsp.isEnabled();
+                || ModuleManager.storageEsp.isEnabled() || ModuleManager.growthEsp.isEnabled()
+                || ModuleManager.spawnerNotifier.isEnabled();
     }
 
     public static Collection<ChunkReport> reports() { return reports.values(); }
@@ -93,7 +100,7 @@ public final class WorldScanner {
     public static void clearAll() {
         MEMORY.clear();
         reports = new HashMap<>();
-        QUEUE.clear(); QUEUED.clear(); LOAD_TIME.clear(); DIRTY.clear(); FLOW_SEEN.clear();
+        QUEUE.clear(); QUEUED.clear(); LOAD_TIME.clear(); DIRTY.clear(); FLOW_SEEN.clear(); EDITS.clear();
         RESULTS.clear();
         lastWorld = null; dimension = "";
         worldToken++;
@@ -116,7 +123,7 @@ public final class WorldScanner {
         dimension = w.getRegistryKey().getValue().toString();
         reports = MEMORY.computeIfAbsent(dimension, k -> new HashMap<>());
         for (ChunkReport r : reports.values()) r.loaded = false;
-        QUEUE.clear(); QUEUED.clear(); LOAD_TIME.clear(); DIRTY.clear(); FLOW_SEEN.clear();
+        QUEUE.clear(); QUEUED.clear(); LOAD_TIME.clear(); DIRTY.clear(); FLOW_SEEN.clear(); EDITS.clear();
         RESULTS.clear();
         worldToken++;
         wasActive = false;
@@ -145,6 +152,11 @@ public final class WorldScanner {
     /** Called (client thread) for every block change the server sends, before it is applied. */
     public static void onBlockChange(BlockPos pos, BlockState old, BlockState neu) {
         long key = ChunkPos.toLong(pos.getX() >> 4, pos.getZ() >> 4);
+        // Remember air we watched being carved out: that corridor is new, not an old route to a base.
+        if (pos.getY() < 64 && !old.isAir() && neu.isAir()) {
+            Set<Long> set = EDITS.computeIfAbsent(key, k -> new HashSet<>());
+            if (set.size() < 512) set.add(pos.asLong());
+        }
         var fluid = neu.getFluidState();
         if (!fluid.isEmpty() && !fluid.isStill()) {
             Long loaded = LOAD_TIME.get(key);
@@ -192,6 +204,7 @@ public final class WorldScanner {
             if (FLOW_SEEN.contains(res.key)) r.age = ChunkReport.Age.NEW;
             int cx = ChunkPos.getPackedX(res.key), cz = ChunkPos.getPackedZ(res.key);
             r.loaded = mc.world.getChunkManager().isChunkLoaded(cx, cz);
+            markTunnelAges(res.key, r, now);
             reports.put(res.key, r);
             regroupGeodes(res.key);
             revision++;
@@ -382,6 +395,17 @@ public final class WorldScanner {
         r.structure = strongStructure ? structure : null;
         r.structureCount = (int) Math.round(best);
 
+        // A natural monster room is a cobblestone cell with a spawner and a chest or two. If the chunk happens to
+        // have no mossy cobblestone, nothing marked it as a structure and its cobblestone walls read as player
+        // building. Recognise the signature before spawners are scored, so their weight cannot hide it.
+        if (r.spawners >= 1 && r.strong <= 0 && r.chests >= 1 && r.built > 0 && !strongStructure) {
+            structure = "Dungeon";
+            best = Math.max(best, 2f);
+            strongStructure = true;
+            r.structure = structure;
+            r.structureCount = Math.max(r.structureCount, 2);
+        }
+
         // Spawners: dungeons and mineshafts hold one (occasionally two). Three or more, or two away from any
         // structure, were carried in (DonutSMP spawner farms).
         if (r.spawners > 0) {
@@ -467,7 +491,8 @@ public final class WorldScanner {
                             r.tunnelLength += run;
                             if (r.tunnels.size() < 24) {
                                 int x1 = axis == 0 ? start + run : a + 1, z1 = axis == 0 ? a + 1 : start + run;
-                                r.tunnels.add(new Box(v.baseX + x0, sy + y, v.baseZ + z0, v.baseX + x1, sy + y + runH, v.baseZ + z1));
+                                Box box = new Box(v.baseX + x0, sy + y, v.baseZ + z0, v.baseX + x1, sy + y + runH, v.baseZ + z1);
+                                r.tunnels.add(new Tunnel(box, axis, run, sy + y, classifyTunnel(v, box, axis, run, sy + y)));
                             }
                         } else r.surfaceSkipped++;
                     }
@@ -528,6 +553,55 @@ public final class WorldScanner {
             int h = 1;
             while (h <= 6 && air(v, sec, sy, x, y + h, z)) h++;
             if (h >= 3 && h <= 6 && solid(v, sec, sy, x, y + h, z)) r.excavated++; // even ceiling
+        }
+    }
+
+    /**
+     * What kind of corridor this is, from what lines its walls. Amethyst, calcite and smooth basalt mean the shaft
+     * was bored into a geode (an amethyst drill); rails only ever come from a player; otherwise it is a plain
+     * pickaxe strip mine.
+     */
+    private static Tunnel.Kind classifyTunnel(ChunkView v, Box b, int axis, int len, int y) {
+        int amethyst = 0, rails = 0;
+        int steps = Math.max(2, len / 3);
+        for (int i = 0; i <= steps; i++) {
+            int x = (int) Math.floor(axis == 0 ? b.minX + (b.maxX - b.minX) * i / steps : b.minX);
+            int z = (int) Math.floor(axis == 0 ? b.minZ : b.minZ + (b.maxZ - b.minZ) * i / steps);
+            for (int dx = -2; dx <= 2; dx++) for (int dy = -1; dy <= 3; dy++) for (int dz = -2; dz <= 2; dz++) {
+                var bl = v.get(x + dx, y + dy, z + dz).getBlock();
+                if (bl == Blocks.AMETHYST_BLOCK || bl == Blocks.BUDDING_AMETHYST || bl == Blocks.CALCITE
+                        || bl == Blocks.SMOOTH_BASALT || bl == Blocks.AMETHYST_CLUSTER) amethyst++;
+                else if (bl == Blocks.RAIL || bl == Blocks.POWERED_RAIL || bl == Blocks.DETECTOR_RAIL || bl == Blocks.ACTIVATOR_RAIL) rails++;
+            }
+        }
+        if (amethyst >= 8) return Tunnel.Kind.AMETHYST_DRILL;
+        if (rails >= 3) return Tunnel.Kind.RAILED;
+        return Tunnel.Kind.PICKAXE;
+    }
+
+    /**
+     * Ages this chunk's corridors once its scan lands on the client thread. A corridor is fresh only when this
+     * session actually watched one of its blocks become air: flowing fluids on chunk load are normal world
+     * generation (lava lakes, waterfalls) and used to mark every old tunnel near them as new.
+     */
+    private static void markTunnelAges(long key, ChunkReport r, long now) {
+        if (r.tunnels.isEmpty()) return;
+        int cx = ChunkPos.getPackedX(key), cz = ChunkPos.getPackedZ(key);
+        for (Tunnel t : r.tunnels) {
+            edits:
+            for (int dx = -1; dx <= 1; dx++) for (int dz = -1; dz <= 1; dz++) {
+                Set<Long> edits = EDITS.get(ChunkPos.toLong(cx + dx, cz + dz));
+                if (edits == null) continue;
+                for (long p : edits) {
+                    BlockPos bp = BlockPos.fromLong(p);
+                    // Only an edit in the corridor's own air counts. Wider radii caught parallel digs one chunk over
+                    // and flipped old corridors to new while they were being looked at.
+                    if (Math.abs(bp.getY() - t.floorY) <= 2 && t.near(bp.getX() + 0.5, bp.getY() + 0.5, bp.getZ() + 0.5, 0.5)) {
+                        t.age = Tunnel.Age.FRESH;
+                        break edits;
+                    }
+                }
+            }
         }
     }
 

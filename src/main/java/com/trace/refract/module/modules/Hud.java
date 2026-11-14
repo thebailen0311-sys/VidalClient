@@ -11,6 +11,8 @@ public class Hud extends Module {
     public final BoolSetting hunting = add(new BoolSetting("Findings Panel", true));
     public final BoolSetting soundLog = add(new BoolSetting("Sound Log", true));
     public final BoolSetting coords = add(new BoolSetting("Coordinates", false));
+    /** Skips the per-panel lens shader and draws a plain tinted panel: the single biggest HUD GPU saving. */
+    public final BoolSetting fastPanels = add(new BoolSetting("Fast Panels", true));
     public final com.trace.refract.setting.NumberSetting scale = add(new com.trace.refract.setting.NumberSetting("HUD Scale", 1.0, 0.5, 2.0, 0.05, "x"));
     public final com.trace.refract.setting.NumberSetting labelScale = add(new com.trace.refract.setting.NumberSetting("Label Scale", 1.0, 0.5, 2.0, 0.05, "x"));
     public final com.trace.refract.setting.NumberSetting cardScale = add(new com.trace.refract.setting.NumberSetting("Detail Card Scale", 1.0, 0.5, 2.0, 0.05, "x"));

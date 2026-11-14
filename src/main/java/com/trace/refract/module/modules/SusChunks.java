@@ -110,7 +110,7 @@ public class SusChunks extends Module {
             for (ChunkReport.KelpColumn k : r.grownKelp) { if (ev++ < 300) Esp.prettyBlock(k.top(), 0.12, 0xFF3DFF8A, walls); }
             if (r.geodeMature) for (BlockPos p : r.clusterEvidence) { if (ev++ < 300) Esp.prettyBlock(p, 0.18, 0xFFC77DFF, walls); }
             if (r.pRotated > 0) for (BlockPos p : r.rotatedEvidence) { if (ev++ < 300) Esp.prettyBlock(p, 0.02, 0xFFFF9A3D, walls); }
-            if (r.pTunnel > 0) for (Box t : r.tunnels) { if (ev++ < 300) Esp.pretty(t, 0xFF38BDF8, walls); }
+            if (r.pTunnel > 0) for (com.trace.refract.scan.Tunnel t : r.tunnels) { if (ev++ < 300) Esp.pretty(t.bounds, 0xFF38BDF8, walls); }
         }
     }
 

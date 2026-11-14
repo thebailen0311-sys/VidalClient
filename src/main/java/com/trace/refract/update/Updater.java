@@ -70,6 +70,8 @@ public final class Updater {
     /** Called once on client start. Silent and cheap when disabled. */
     public static void init() {
         if (System.getProperty("refract.noupdate") != null) { status = "disabled"; return; }
+        // A dev client runs from build/classes; writing a jar into run/mods would collide with the classpath copy.
+        if (runningJar() == null) { status = "dev build - updates off"; return; }
         pruneOlder();
         Thread t = new Thread(() -> {
             try { check(); } catch (Throwable e) { status = "check failed: " + e; Refract.LOG.debug("update check failed", e); }
@@ -79,7 +81,7 @@ public final class Updater {
     }
 
     /** One update record, from either source. */
-    private record Release(String version, String title, String notes, String jarUrl, String source) {}
+    private record Release(String version, String title, String notes, String jarUrl, String sha256, String source) {}
 
     /** Blocking check; call from a worker thread. */
     public static void check() throws Exception {
@@ -107,6 +109,40 @@ public final class Updater {
         try (InputStream in = d.getInputStream(); OutputStream out = Files.newOutputStream(tmp)) {
             in.transferTo(out);
         }
+        if (rel.sha256 != null && !rel.sha256.isBlank()) {
+            String actual = sha256(tmp);
+            if (!actual.equalsIgnoreCase(rel.sha256.trim())) {
+                Files.deleteIfExists(tmp);
+                status = "download failed: sha256 mismatch";
+                Refract.LOG.warn("Update jar checksum mismatch: expected {}, got {}", rel.sha256, actual);
+                return;
+            }
+        }
+
+        // Fabric loads every jar in mods/, and two jars with the same mod id abort the launch. The running jar has to
+        // be out of the way before the new one lands. Windows lets an open jar be renamed even when it cannot be
+        // deleted, so move it to *.old and let pruneOlder() delete that on the next start.
+        Path running = runningJar();
+        boolean retired = false;
+        if (running != null && Files.isRegularFile(running)
+                && running.getParent() != null && running.getParent().toAbsolutePath().equals(mods.toAbsolutePath())) {
+            Path old = running.resolveSibling(running.getFileName() + ".old");
+            try {
+                Files.deleteIfExists(old);
+                Files.move(running, old, StandardCopyOption.REPLACE_EXISTING);
+                retired = true;
+            } catch (Exception ex) {
+                Refract.LOG.warn("Could not retire the running jar: {}", ex.toString());
+            }
+        }
+        if (running != null && !retired && Files.exists(running)) {
+            // Locked (or not in mods/): never leave two versions behind. Park the download and say exactly what to do.
+            Path pending = mods.resolve(fileName + ".pending");
+            Files.move(tmp, pending, StandardCopyOption.REPLACE_EXISTING);
+            status = "downloaded; replace " + running.getFileName() + " with " + pending.getFileName();
+            announce(rel, false);
+            return;
+        }
         Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING);
         status = "downloaded " + rel.version + " -> mods/" + fileName + " (restart to apply)";
         announce(rel, true);
@@ -121,7 +157,7 @@ public final class Updater {
             if (tag.isEmpty()) return null;
             String name = o.has("name") && !o.get("name").isJsonNull() ? o.get("name").getAsString() : tag;
             String body = o.has("body") && !o.get("body").isJsonNull() ? o.get("body").getAsString() : "";
-            return new Release(tag, name, body, pickJar(o), "release " + tag);
+            return new Release(tag, name, body, pickJar(o), null, "release " + tag);
         } catch (Exception e) {
             return null;
         }
@@ -136,8 +172,9 @@ public final class Updater {
             String v = o.get("version").getAsString();
             String notes = o.has("notes") && !o.get("notes").isJsonNull() ? o.get("notes").getAsString() : "";
             String jar = o.has("jar") && !o.get("jar").isJsonNull() ? o.get("jar").getAsString() : "";
+            String sha = o.has("sha256") && !o.get("sha256").isJsonNull() ? o.get("sha256").getAsString() : null;
             String url = jar.isEmpty() ? null : (jar.startsWith("http") ? jar : RAW + jar);
-            return new Release(v, v, notes, url, "update.json");
+            return new Release(v, v, notes, url, sha, "update.json");
         } catch (Exception e) {
             return null;
         }
@@ -228,6 +265,32 @@ public final class Updater {
 
     private static String sanitize(String tag) { return tag.replaceAll("[^A-Za-z0-9._-]", "_"); }
 
+    /** The jar this process was loaded from, or null when running from a classes directory (dev). */
+    private static Path runningJar() {
+        for (String id : new String[]{"refract", "vanta"}) {
+            Optional<ModContainer> c = FabricLoader.getInstance().getModContainer(id);
+            if (c.isEmpty()) continue;
+            try {
+                for (Path p : c.get().getRootPaths()) {
+                    if (Files.isRegularFile(p) && p.getFileName().toString().endsWith(".jar")) return p;
+                }
+            } catch (Throwable ignored) { }
+        }
+        return null;
+    }
+
+    private static String sha256(Path p) throws Exception {
+        java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
+        try (InputStream in = Files.newInputStream(p)) {
+            byte[] buf = new byte[8192];
+            int n;
+            while ((n = in.read(buf)) > 0) md.update(buf, 0, n);
+        }
+        StringBuilder sb = new StringBuilder();
+        for (byte b : md.digest()) sb.append(String.format("%02x", b));
+        return sb.toString();
+    }
+
     /**
      * Deletes superseded Vanta jars in {@code mods/} so only one version loads. The jar in use stays (Windows locks
      * it); the launch after this one removes it.
@@ -239,6 +302,7 @@ public final class Updater {
         try (DirectoryStream<Path> ds = Files.newDirectoryStream(mods, "*.jar")) {
             for (Path p : ds) {
                 String name = p.getFileName().toString().toLowerCase(Locale.ROOT);
+                if (name.endsWith(".jar.old")) { Files.deleteIfExists(p); continue; }
                 if (!(name.startsWith("vanta-") || name.startsWith("refract-"))) continue;
                 if (name.contains(current.toLowerCase(Locale.ROOT))) continue;
                 try {

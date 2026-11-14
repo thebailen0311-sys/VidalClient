@@ -484,8 +484,18 @@ public final class Gfx {
         glassBody(t, x, y, w, h, r, 0.82f);
     }
 
+    /** Set once per HUD frame from the HUD module; see {@code Hud.fastPanels}. */
+    public static boolean fastPanels;
+
     /** HUD panel (tables, pills, toasts): the shared frosted-glass recipe. */
     public static void hudGlass(Theme t, float x, float y, float w, float h, float r) {
+        if (fastPanels) {
+            // One tinted rounded rect and a hairline instead of the lens shader. Every HUD panel used to cost a
+            // full shader pass; with a findings table, toasts, labels and module list that is a lot of fill rate.
+            roundGradient(x, y, w, h, r, Colors.withAlpha(t.glassTop(), 0xD8), Colors.withAlpha(t.glassBottom(), 0xE6));
+            outline(x, y, w, h, r, 1, 0x2EFFFFFF, 0x18000000);
+            return;
+        }
         frost(t, x, y, w, h, r, 0.4f);
     }
 

@@ -63,7 +63,8 @@ public final class ChunkReport {
     // Underground activity
     public int rotated, highDeepslate, caveVinesGrown;
     public final List<BlockPos> rotatedEvidence = new ArrayList<>();
-    public final List<Box> tunnels = new ArrayList<>();
+    /** Straight player corridors, classified (pickaxe / amethyst drill / railed) with their age. */
+    public final List<Tunnel> tunnels = new ArrayList<>();
     public int tunnelLength;
     public int hiddenOres;
     public boolean antiXray;
@@ -100,7 +101,7 @@ public final class ChunkReport {
         if (!evidence.isEmpty()) return centroid(evidence);
         if (!rooms.isEmpty()) return rooms.get(0).getCenter();
         if (!rotatedEvidence.isEmpty()) return centroid(rotatedEvidence);
-        if (!tunnels.isEmpty()) return tunnels.get(0).getCenter();
+        if (!tunnels.isEmpty()) return tunnels.get(0).center().toCenterPos();
         if (!grownKelp.isEmpty()) {
             List<BlockPos> tops = new ArrayList<>(grownKelp.size());
             for (KelpColumn k : grownKelp) tops.add(k.top());

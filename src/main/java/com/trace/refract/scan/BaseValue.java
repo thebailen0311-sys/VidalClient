@@ -83,6 +83,16 @@ public final class BaseValue {
             Map<String, Double> m = defaults();
             var o = com.google.gson.JsonParser.parseString(java.nio.file.Files.readString(FILE)).getAsJsonObject();
             for (var e : o.entrySet()) if (e.getValue().isJsonPrimitive()) m.put(e.getKey(), e.getValue().getAsDouble());
+            // Live market snapshot, if MarketPrices has one. Names come from the market API, labels from the scanner.
+            java.nio.file.Path live = FILE.resolveSibling("refract-prices-live.json");
+            if (java.nio.file.Files.exists(live)) {
+                var lo = com.google.gson.JsonParser.parseString(java.nio.file.Files.readString(live)).getAsJsonObject();
+                for (var e : lo.entrySet()) {
+                    if (!e.getValue().isJsonPrimitive()) continue;
+                    String label = matchLabel(m, e.getKey());
+                    if (label != null) m.put(label, e.getValue().getAsDouble());
+                }
+            }
             PRICE.clear();
             PRICE.putAll(m);
             loadedStamp = stamp;
@@ -90,6 +100,15 @@ public final class BaseValue {
             if (PRICE.isEmpty()) PRICE.putAll(defaults());
             loadedStamp = 0;
         }
+    }
+
+    /** The scan's label for a market item name, ignoring case and punctuation ("shulker_box" == "Shulker Box"). */
+    private static String matchLabel(Map<String, Double> prices, String name) {
+        String n = name.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]", "");
+        for (String k : prices.keySet()) {
+            if (k.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]", "").equals(n)) return k;
+        }
+        return null;
     }
 
     /** Value estimate with its biggest contributors (label, count, subtotal), largest first. */

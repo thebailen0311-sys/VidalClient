@@ -1,5 +1,6 @@
 {
-  "version": "1.0.9",
-  "notes": "Auto Crystal now recognises obsidian you are already looking at instead of placing obsidian on top of it, reuses one spot, and bounds item swaps so it cannot flip forever. Entity reach is capped at 2.95 and block placement at 4.2, which removes the reach alerts. Anchor Macro no longer parks after one pop.",
-  "jar": "dist/vanta-1.0.9.jar"
+  "version": "1.0.10",
+  "notes": "Faster HUD (Fast Panels skips the per-panel lens shader), strict base filtering with honest statuses, tunnel leads with compass routes, Relog module, Spawner Notifier, and live market prices when a DonutSMP API key is set. Auto-update now moves the running jar aside before installing, so the new version actually loads on restart instead of colliding with the old one.",
+  "jar": "dist/vanta-1.0.10.jar",
+  "sha256": "df264cd629d6d3e4ebaa67cf9074c0abba3c27560b30e43aeec9c7e6905158f0"
 }

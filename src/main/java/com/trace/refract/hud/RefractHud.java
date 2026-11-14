@@ -58,6 +58,7 @@ public final class RefractHud {
             Gfx.newLayer(); // panels cover world labels instead of labels bleeding through them
 
             Hud hud = ModuleManager.hud;
+            Gfx.fastPanels = hud.fastPanels.on();
             boolean show = hud.isEnabled() || editing;
             float g = hud.scale.asFloat();
             if (show) {
@@ -150,6 +151,10 @@ public final class RefractHud {
             for (BaseFinder.Candidate c : ModuleManager.baseFinder.candidates) {
                 if (rows.size() >= 4) break;
                 rows.add(new Row(c.type + " · " + c.status, c.anchor, c.center, c.statusColor));
+            }
+            for (BaseFinder.Lead l : ModuleManager.baseFinder.leads) {
+                if (rows.size() >= 6) break;
+                rows.add(new Row("Tunnel · " + l.length + "m", BlockPos.ofFloored(l.to.toCenterPos()), l.to.toCenterPos(), 0xFF38BDF8));
             }
         }
         if (sc) {

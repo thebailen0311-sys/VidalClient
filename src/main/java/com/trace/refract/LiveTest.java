@@ -22,7 +22,9 @@ import java.util.List;
  */
 public final class LiveTest {
     private static final String SPEC = System.getProperty("refract.livetest", "").trim().toLowerCase();
-    private static boolean started, finished;
+    private static boolean started, finished, relogFired;
+    private static long fpsSum;
+    private static int fpsN;
     private static int ticks;
     private static final List<Module> on = new ArrayList<>();
     private static Entity target;
@@ -49,6 +51,35 @@ public final class LiveTest {
         if (m == null) { log("missing module: " + name); return; }
         m.setEnabled(on0, false);
         if (on0) on.add(m);
+    }
+
+    /** Logs every tunnel lead (kind, length, age, route) and base candidate, for the tunnels spec. */
+    private static void logLeads(String tag) {
+        var bf = ModuleManager.baseFinder;
+        StringBuilder leads = new StringBuilder();
+        for (var l : bf.leads) {
+            leads.append(l.kindLabel()).append('/').append(l.length).append("m/new=").append(l.fresh)
+                    .append('/').append(l.route).append("; ");
+        }
+        StringBuilder bases = new StringBuilder();
+        for (var c : bf.candidates) {
+            bases.append(c.type).append('@').append(c.anchor).append('(').append(Math.round(c.confidence * 100)).append("%){")
+                    .append(c.summary(6)).append("} ");
+        }
+        int tunnels = 0, chunks = 0;
+        StringBuilder raw = new StringBuilder();
+        for (var r : com.trace.refract.scan.WorldScanner.reports()) {
+            if (r.tunnels.isEmpty()) continue;
+            chunks++;
+            tunnels += r.tunnels.size();
+            for (var t : r.tunnels) {
+                if (raw.length() < 320) raw.append(t.length).append('m').append(t.kind).append('/').append(t.age)
+                        .append("/y").append(t.floorY).append("/axis").append(t.axis).append(" ");
+            }
+        }
+        raw.append(" | minTunnel=").append(bf.minTunnel.asInt()).append(" leadsOn=").append(bf.tunnelLeads.on());
+        log(tag + " tunnels=" + tunnels + " in " + chunks + " chunks; leads=" + bf.leads.size() + " [" + leads
+                + "] bases=" + bf.candidates.size() + " [" + bases + "] raw=[" + raw + "]");
     }
 
     private static LivingEntity nearest(MinecraftClient mc) {
@@ -113,12 +144,18 @@ public final class LiveTest {
         mc.player.setPitch((float) -Math.toDegrees(Math.atan2(dy, flat)));
     }
 
+    private static void fpsReset() { fpsSum = 0; fpsN = 0; }
+
+    private static int fpsAvg() { return fpsN == 0 ? 0 : (int) (fpsSum / fpsN); }
+
     /** Called every client tick, before modules tick. */
     public static void tick(MinecraftClient mc) {
         if (SPEC.isEmpty() || finished) return;
         if (mc.player == null || mc.world == null || mc.getNetworkHandler() == null) return;
         if (!started) { started = true; log("joined, spec=" + SPEC); }
         ticks++;
+        fpsSum += mc.getCurrentFps();
+        fpsN++;
 
         // Structure specs: if a previous run left the player dead, respawn instead of idling on the death screen.
         if (mc.player.isDead() && (SPEC.equals("base") || SPEC.equals("vault") || SPEC.equals("debris") || SPEC.equals("esp"))) {
@@ -303,6 +340,35 @@ public final class LiveTest {
                     log("base t=" + ticks + " n=" + ModuleManager.baseFinder.candidates.size() + " [" + sb + "]");
                 }
             }
+            case "fps" -> {
+                // Same scene, same modules: only the HUD panel style changes between the two measurements.
+                if (ticks == 20) cmd(mc, "gamemode creative");
+                if (ticks == 40) {
+                    enable("base finder", true);
+                    enable("storage esp", true);
+                    enable("spawner notifier", true);
+                    log("fps: hunting stack on");
+                }
+                if (ticks == 60) { ModuleManager.hud.fastPanels.set(false); fpsReset(); log("fps: lens panels"); }
+                if (ticks == 140) {
+                    log("fps lens=" + fpsAvg());
+                    ModuleManager.hud.fastPanels.set(true);
+                    fpsReset();
+                    log("fps: fast panels");
+                }
+                if (ticks == 220) log("fps fast=" + fpsAvg() + " | " + com.trace.refract.util.Prof.report(10));
+            }
+            case "relog" -> {
+                // Enabling Relog drops the connection; the rejoin resets this spec's tick counter, so the flag keeps
+                // it to one relog per run. A second pass through the join is the proof.
+                if (ticks == 60 && !relogFired) {
+                    relogFired = true;
+                    log("relog: dropping connection to " + mc.getCurrentServerEntry());
+                    ModuleManager.relog.setEnabled(true);
+                }
+                if (ticks == 120) log("relog: back in a world, handler=" + (mc.getNetworkHandler() != null));
+                if (ticks == 160) log("RESULT spec=relog rejoined=" + (mc.getNetworkHandler() != null));
+            }
             case "aim" -> {
                 if (ticks == 20) { cmd(mc, "gamemode creative"); enable("aim assist", true); log("aim assist on"); }
                 if (ticks > 40 && ticks % 40 == 0) log("aim alive t=" + ticks + " yaw=" + mc.player.getYaw() + " pitch=" + mc.player.getPitch());
@@ -389,8 +455,9 @@ public final class LiveTest {
                     cmd(mc, "tp @s 4000 -20 4000");
                     log("moved underground for vault test");
                 }
-                if (ticks == 22) {
+                if (ticks == 60) {
                     // Underground on purpose: surface builds are filtered out as ordinary terrain.
+                    // (Built after the destination chunks have loaded: fill in unloaded chunks fails silently.)
                     cmd(mc, "execute at @s run fill ~-5 ~-1 ~-5 ~5 ~4 ~5 minecraft:stone");
                     cmd(mc, "execute at @s run fill ~-4 ~ ~-4 ~4 ~3 ~4 minecraft:air");
                     cmd(mc, "execute at @s run fill ~-3 ~ ~-3 ~-1 ~ ~-3 minecraft:shulker_box");
@@ -398,8 +465,8 @@ public final class LiveTest {
                     cmd(mc, "execute at @s run fill ~-3 ~ ~-1 ~ ~ ~-1 minecraft:chest");
                     log("vault structure built underground");
                 }
-                if (ticks == 50) enable("base finder", true);
-                if (ticks > 90 && ticks % 40 == 0 && ModuleManager.baseFinder != null) {
+                if (ticks == 90) enable("base finder", true);
+                if (ticks > 110 && ticks % 40 == 0 && ModuleManager.baseFinder != null) {
                     StringBuilder sb = new StringBuilder();
                     for (var cd : ModuleManager.baseFinder.candidates) {
                         sb.append(cd.type).append('@').append(cd.anchor)
@@ -482,6 +549,62 @@ public final class LiveTest {
                 if (ticks == 50) { enable("auto s tap", true); mc.options.attackKey.setPressed(true); }
                 if (ticks > 50) look(mc, target = nearest(mc));
                 if (ticks == 180) mc.options.attackKey.setPressed(false);
+            }
+            case "natural" -> {
+                // Control: untouched terrain far from every test build. Nothing here should read as a base.
+                if (ticks == 18) { cmd(mc, "tp @s 50000 -50 50000"); log("moved to untouched terrain"); }
+                if (ticks == 96) {
+                    enable("base finder", true);
+                    enable("spawner notifier", true);
+                    log("base finder + spawner notifier on in the wild");
+                }
+                if (ticks > 140 && ticks % 40 == 0) {
+                    log("wild t=" + ticks + " spawners=" + ModuleManager.spawnerNotifier.suffix()
+                            + " bases=" + ModuleManager.baseFinder.candidates.size());
+                }
+                if (ticks >= 120 && ticks % 40 == 0 && ModuleManager.baseFinder != null) logLeads("natural t=" + ticks);
+            }
+            case "tunnels" -> {
+                // Two old corridors (plain pickaxe, and one bored into a geode) plus one dug while scanning, which
+                // must come back as NEW and stay out of the leads.
+                if (ticks == 18) { cmd(mc, "tp @s 6000 -50 6000"); log("teleported; waiting for chunks before building"); }
+                // Phase 1 builds the corridors; phase 2 (-Drefract.tunnels.build=0) reconnects so the same corridors
+                // are pre-existing and must come back as OLD. A client can only call a corridor new when it watched it
+                // being dug, so both phases are needed to prove the age filter works.
+                if (ticks == 66 && System.getProperty("refract.tunnels.build", "1").equals("1")) {
+                    cmd(mc, "gamemode creative");
+                    cmd(mc, "execute at @s run fill ~-6 ~-2 ~-6 ~90 ~5 ~14 minecraft:stone");
+                    cmd(mc, "execute at @s run fill ~-6 ~-2 ~-50 ~10 ~5 ~-6 minecraft:stone");
+                    // Old pickaxe tunnel: 80 long, 1 wide, 2 high, heading east.
+                    cmd(mc, "execute at @s run fill ~4 ~ ~8 ~84 ~1 ~8 minecraft:air");
+                    cmd(mc, "execute at @s run fill ~8 ~ ~8 ~8 ~ ~8 minecraft:torch");
+                    cmd(mc, "execute at @s run fill ~40 ~ ~8 ~40 ~ ~8 minecraft:torch");
+                    // Amethyst drill: 36 long heading north, ending in a hollowed geode.
+                    cmd(mc, "execute at @s run fill ~-2 ~ ~-8 ~-2 ~1 ~-44 minecraft:air");
+                    cmd(mc, "execute at @s run fill ~-6 ~-1 ~-46 ~2 ~3 ~-44 minecraft:calcite");
+                    cmd(mc, "execute at @s run fill ~-5 ~ ~-45 ~1 ~ ~-45 minecraft:air");
+                    cmd(mc, "execute at @s run fill ~-5 ~-1 ~-45 ~1 ~-1 ~-45 minecraft:amethyst_block");
+                    cmd(mc, "execute at @s run fill ~-5 ~ ~-45 ~1 ~ ~-45 minecraft:budding_amethyst");
+                    log("old pickaxe tunnel + amethyst drill built");
+                }
+                if (ticks == 96) { enable("base finder", true); log("base finder on"); }
+                if (ticks >= 120 && ticks % 40 == 0 && ModuleManager.baseFinder != null) logLeads("tunnels t=" + ticks);
+                if (ticks == 66 && !System.getProperty("refract.tunnels.build", "1").equals("1")) {
+                    log("phase 2: not building, the corridors from phase 1 should read as old");
+                }
+                if (ticks == 170 && !ModuleManager.baseFinder.leads.isEmpty()) {
+                    var l = ModuleManager.baseFinder.leads.get(0);
+                    var d = l.to.toCenterPos().subtract(mc.player.getEyePos());
+                    mc.player.setYaw((float) Math.toDegrees(Math.atan2(-d.x, d.z)));
+                    mc.player.setPitch((float) Math.toDegrees(-Math.atan2(d.y, Math.hypot(d.x, d.z))));
+                    log("looking at lead " + l.kindLabel() + " at " + l.to);
+                }
+                if (ticks == 178) shoot(mc, "tunnels.png");
+                if (ticks == 190) {
+                    // Fresh ground (x+6) that no earlier run has touched, so this really is a new corridor.
+                    cmd(mc, "execute at @s run fill ~6 ~ ~-2 ~6 ~1 ~-30 minecraft:air");
+                    log("dug a 29m corridor while scanning (must be new, not a lead)");
+                }
             }
             default -> log("unknown spec: " + SPEC);
         }
