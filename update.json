@@ -2,5 +2,5 @@
   "version": "1.0.10",
   "notes": "Faster HUD (Fast Panels skips the per-panel lens shader), strict base filtering with honest statuses, tunnel leads with compass routes, Relog module, Spawner Notifier, and live market prices when a DonutSMP API key is set. Auto-update now moves the running jar aside before installing, so the new version actually loads on restart instead of colliding with the old one.",
   "jar": "dist/vanta-1.0.10.jar",
-  "sha256": "df264cd629d6d3e4ebaa67cf9074c0abba3c27560b30e43aeec9c7e6905158f0"
+  "sha256": "b21c57754c89cfdb817950b0d43073b5fc08b88f58f315838654776594ca6b84"
 }
