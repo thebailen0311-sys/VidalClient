@@ -130,7 +130,8 @@ public final class Updater {
     /** Repository manifest: a push is enough, no release required. */
     private static Release fetchManifest() {
         try {
-            JsonObject o = getJson(MANIFEST);
+            // raw.githubusercontent.com caches with max-age=300; a unique query keeps a fresh push visible at once.
+            JsonObject o = getJson(MANIFEST + "?t=" + System.currentTimeMillis());
             if (o == null || !o.has("version")) return null;
             String v = o.get("version").getAsString();
             String notes = o.has("notes") && !o.get("notes").isJsonNull() ? o.get("notes").getAsString() : "";
