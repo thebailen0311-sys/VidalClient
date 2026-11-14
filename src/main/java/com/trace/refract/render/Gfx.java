@@ -492,8 +492,10 @@ public final class Gfx {
         if (fastPanels) {
             // One tinted rounded rect and a hairline instead of the lens shader. Every HUD panel used to cost a
             // full shader pass; with a findings table, toasts, labels and module list that is a lot of fill rate.
-            roundGradient(x, y, w, h, r, Colors.withAlpha(t.glassTop(), 0xD8), Colors.withAlpha(t.glassBottom(), 0xE6));
-            outline(x, y, w, h, r, 1, 0x2EFFFFFF, 0x18000000);
+            // A dark base keeps text readable over a bright sky; the theme tint on top keeps it looking like the theme.
+            roundGradient(x, y, w, h, r, 0xE6141722, 0xE60A0C13);
+            roundGradient(x, y, w, h, r, Colors.withAlpha(t.glassTop(), 0x1E), Colors.withAlpha(t.glassBottom(), 0x0C));
+            outline(x, y, w, h, r, 1, 0x2EFFFFFF, 0x1C000000);
             return;
         }
         frost(t, x, y, w, h, r, 0.4f);

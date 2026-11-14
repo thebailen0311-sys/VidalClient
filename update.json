@@ -1,6 +1,6 @@
 {
-  "version": "1.0.11",
+  "version": "1.0.12",
   "notes": "Knife draws now have their own flourishes: the butterfly flips its handles open mid-twirl, the karambit spins twice around your finger, both throw sparks as they come out, and the arm snaps up to meet them. The GUI gained drifting aurora light behind the window, click ripples, a pulsing selected dock icon and a cursor-following glow on cards.",
-  "jar": "dist/vanta-1.0.11.jar",
-  "sha256": "70a39d73e95859bf91f32fe07eb321ce10ce01cd31df41c03f4eda25a30f55a7"
+  "jar": "dist/vanta-1.0.12.jar",
+  "sha256": "3670400b6b9b826b342e00e48b1ae722c701dfe91dda728dfb857353d29a62c0"
 }
