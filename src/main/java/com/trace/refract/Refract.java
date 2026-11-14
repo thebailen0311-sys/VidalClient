@@ -74,7 +74,7 @@ public class Refract implements ClientModInitializer {
         HudElementRegistry.addFirst(Identifier.of(ID, "grade"), (ctx, tick) -> {
             MinecraftClient mc = MinecraftClient.getInstance();
             if (ModuleManager.ambience.isEnabled() && mc.currentScreen == null) {
-                ModuleManager.ambience.drawGrade(ctx.getScaledWindowWidth(), ctx.getScaledWindowHeight());
+                ModuleManager.ambience.drawGrade(ctx, ctx.getScaledWindowWidth(), ctx.getScaledWindowHeight());
             }
         });
         HudElementRegistry.addLast(Identifier.of(ID, "hud"), RefractHud::render);

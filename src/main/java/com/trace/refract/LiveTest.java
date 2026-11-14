@@ -288,6 +288,14 @@ public final class LiveTest {
                     log("base t=" + ticks + " n=" + ModuleManager.baseFinder.candidates.size() + " [" + sb + "]");
                 }
             }
+            case "ambience" -> {
+                if (ticks == 20) {
+                    cmd(mc, "gamemode creative");
+                    enable("ambience", true);
+                    log("ambience on, screen is null: " + (mc.currentScreen == null));
+                }
+                if (ticks == 60) log("still alive at t=60");
+            }
             case "update" -> {
                 if (ticks == 100) log("updater status: " + com.trace.refract.update.Updater.status()
                         + " current=" + com.trace.refract.update.Updater.currentVersion()

@@ -442,7 +442,16 @@ public final class Gfx {
 
     /** Full-screen post-processing (postfx.fsh); sizes in GUI units. */
     public static void post(float w, float h, float bloom, float saturation, float vignette, float grade, int preset, float hue) {
-        Glass.post(ctx, w * s, h * s, bloom, saturation, vignette, grade, preset, hue);
+        post(ctx, w, h, bloom, saturation, vignette, grade, preset, hue);
+    }
+
+    /**
+     * Same pass with an explicit context. HUD elements are not drawn between {@code begin()}/{@code end()}, so the
+     * static context is null there — the caller has to hand over the one it was given.
+     */
+    public static void post(net.minecraft.client.gui.DrawContext dc, float w, float h, float bloom, float saturation, float vignette, float grade, int preset, float hue) {
+        if (dc == null) return;
+        Glass.post(dc, w * s, h * s, bloom, saturation, vignette, grade, preset, hue);
     }
 
     /** One soft additive light (glow.fsh). */

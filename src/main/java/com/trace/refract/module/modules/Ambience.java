@@ -152,11 +152,19 @@ public class Ambience extends Module {
      * Shader post-processing over the world (postfx.fsh): bloom on bright areas, HSL-style saturation and vibrance,
      * the chosen colour grade, a smooth vignette and fine film grain. Drawn under the HUD (called from RefractHud).
      */
-    public void drawGrade(float sw, float sh) {
+    public void drawGrade(net.minecraft.client.gui.DrawContext ctx, float sw, float sh) {
         int preset = switch (grade.get()) { case "Cinematic" -> 1; case "Dream" -> 2; case "Noir" -> 3; case "Neon" -> 4; default -> 0; };
         int acc = Themes.current().accent();
         float[] hsb = java.awt.Color.RGBtoHSB(Colors.r(acc), Colors.g(acc), Colors.b(acc), null);
-        Gfx.post(sw, sh, bloom.asFloat(), saturation.asFloat(), vignetteAmt.asFloat(), preset == 0 ? 0 : gradeStrength.asFloat(), preset, hsb[0]);
+        Gfx.post(ctx, sw, sh, bloom.asFloat(), saturation.asFloat(), vignetteAmt.asFloat(), preset == 0 ? 0 : gradeStrength.asFloat(), preset, hsb[0]);
+    }
+
+    /** Kept for callers that already run inside a GUI frame, where the shared context is valid. */
+    public void drawGrade(float sw, float sh) {
+        Gfx.post(sw, sh, bloom.asFloat(), saturation.asFloat(), vignetteAmt.asFloat(),
+                grade.is("Off") ? 0 : gradeStrength.asFloat(),
+                switch (grade.get()) { case "Cinematic" -> 1; case "Dream" -> 2; case "Noir" -> 3; case "Neon" -> 4; default -> 0; },
+                java.awt.Color.RGBtoHSB(Colors.r(Themes.current().accent()), Colors.g(Themes.current().accent()), Colors.b(Themes.current().accent()), null)[0]);
     }
 
     /** The colour the sky leans toward in the chosen mode. */
