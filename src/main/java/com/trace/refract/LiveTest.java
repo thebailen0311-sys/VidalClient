@@ -340,6 +340,30 @@ public final class LiveTest {
                     log("base t=" + ticks + " n=" + ModuleManager.baseFinder.candidates.size() + " [" + sb + "]");
                 }
             }
+            case "knives" -> {
+                if (ticks == 30) {
+                    cmd(mc, "gamemode creative");
+                    cmd(mc, "tp @s 0 120 0");
+                    cmd(mc, "time set noon");
+                    cmd(mc, "weather clear");
+                }
+                if (ticks == 60) {
+                    cmd(mc, "give @s diamond_sword");
+                    enable("cosmetics", true);
+                    enable("fullbright", true);
+                    ModuleManager.cosmetics.knife.set("Karambit");
+                    mc.player.getInventory().setSelectedSlot(0);
+                    mc.options.setPerspective(net.minecraft.client.option.Perspective.FIRST_PERSON);
+                    log("karambit out at " + mc.player.getBlockPos());
+                }
+                if (ticks == 72) { shoot(mc, "knife-karambit.png"); log("karambit arm renders=" + com.trace.refract.render.knife.KnifeRenderer.armRenders); }
+                if (ticks == 95) { ModuleManager.cosmetics.knife.set("Butterfly"); mc.player.getInventory().setSelectedSlot(1); }
+                if (ticks == 96) mc.player.getInventory().setSelectedSlot(0);
+                if (ticks == 107) shoot(mc, "knife-butterfly.png");
+                if (ticks == 130) { mc.setScreen(new com.trace.refract.gui.ClickGuiScreen()); log("gui open"); }
+                if (ticks == 145) shoot(mc, "gui-anim.png");
+                if (ticks == 155) mc.setScreen(null);
+            }
             case "fps" -> {
                 // Same scene, same modules: only the HUD panel style changes between the two measurements.
                 if (ticks == 20) cmd(mc, "gamemode creative");

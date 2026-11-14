@@ -151,7 +151,10 @@ public class Cosmetics extends Module {
         ItemStack held = mc.player.getMainHandStack();
         boolean isKnife = knifeOn() && net.minecraft.registry.Registries.ITEM.getId(held.getItem()).getPath().endsWith("_sword");
         int slot = mc.player.getInventory().getSelectedSlot();
-        if (isKnife && (!lastKnife || slot != lastSlot)) KnifeRenderer.drawStart = Time.seconds();
+        if (isKnife && (!lastKnife || slot != lastSlot)) {
+            KnifeRenderer.drawStart = Time.seconds();
+            drawBurst();
+        }
         lastKnife = isKnife;
         lastSlot = slot;
         while (inspectKey.wasPressed()) if (isKnife) KnifeRenderer.inspectStart = Time.seconds();
@@ -175,6 +178,24 @@ public class Cosmetics extends Module {
             Motes.spawn(p.x + Math.cos(a) * r, p.y + rng.nextDouble() * mc.player.getHeight(), p.z + Math.sin(a) * r,
                     0, 0.03, 0, 26, 0.06f, Colors.lerp(t.accent(), 0xFFFFFFFF, 0.3f), t.accent2());
         }
+    }
+
+    /** Sparks thrown off the hand as the knife comes out, tinted by which knife it is. */
+    private void drawBurst() {
+        if (mc.player == null) return;
+        Theme t = Themes.current();
+        boolean butterfly = "Butterfly".equals(knife.get());
+        int a = butterfly ? 0xFFFFD84D : t.accent();
+        int b = butterfly ? 0xFFFFFFFF : t.accent2();
+        Vec3d eye = mc.player.getEyePos();
+        Vec3d fwd = mc.player.getRotationVec(1f);
+        Vec3d hand = eye.add(fwd.multiply(0.55)).add(0, -0.28, 0);
+        for (int i = 0; i < 14; i++) {
+            double dx = (rng.nextDouble() - 0.5) * 0.16, dy = (rng.nextDouble() - 0.3) * 0.16, dz = (rng.nextDouble() - 0.5) * 0.16;
+            Motes.spawn(hand.x + dx * 2, hand.y + dy * 2, hand.z + dz * 2,
+                    dx, dy + 0.02, dz, 12 + rng.nextInt(8), 0.045f + rng.nextFloat() * 0.03f, a, b);
+        }
+        Motes.spawn(hand.x, hand.y, hand.z, 0, 0, 0, 6, 0.28f, 0xFFFFFFFF, a);
     }
 
     @Override public void onWorldRender(float tickDelta) {

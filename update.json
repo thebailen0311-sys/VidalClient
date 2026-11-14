@@ -1,6 +1,6 @@
 {
-  "version": "1.0.10",
-  "notes": "Faster HUD (Fast Panels measured 73 -> 108 fps in the same scene), stricter base detection with honest statuses, old-tunnel leads with compass routes, Relog, Spawner Notifier, and live market prices when a key is set. Updates now stage the new jar and swap it in the moment you close the game, so they actually apply without a launcher or a manual file move.",
-  "jar": "dist/vanta-1.0.10.jar",
-  "sha256": "09d56b8ce766667bd15865eea5913984482ea4545a0324ffd05665395fca5743"
+  "version": "1.0.11",
+  "notes": "Knife draws now have their own flourishes: the butterfly flips its handles open mid-twirl, the karambit spins twice around your finger, both throw sparks as they come out, and the arm snaps up to meet them. The GUI gained drifting aurora light behind the window, click ripples, a pulsing selected dock icon and a cursor-following glow on cards.",
+  "jar": "dist/vanta-1.0.11.jar",
+  "sha256": "70a39d73e95859bf91f32fe07eb321ce10ce01cd31df41c03f4eda25a30f55a7"
 }

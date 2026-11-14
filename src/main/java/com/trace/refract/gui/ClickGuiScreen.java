@@ -121,6 +121,8 @@ public class ClickGuiScreen extends Screen {
     private String search = "";
     private boolean searchFocus;
     private Module hoverCard;
+    /** Click ripples in window space: x, y, start millis. */
+    private final List<float[]> ripples = new ArrayList<>();
     private final Anim catPill = new Anim(category.ordinal(), 18f);
     private final Anim generalPill = new Anim(0, 18f);
     private final Anim searchGlow = new Anim(0, 14f);
@@ -236,14 +238,42 @@ public class ClickGuiScreen extends Screen {
         Gfx.alpha = e;
 
         dockTip = null;
+        drawAmbient(t);
         float dockW = 46, gap = 8, headH = 30;
         drawDock(t, dt, winX, winY, dockW, winH);
         float cx = winX + dockW + gap, cw = winX + winW - cx;
         drawHeader(t, dt, cx, winY, cw, headH);
         drawContent(t, dt, cx, winY + headH + gap, cw, winH - headH - gap);
         drawDockTip(t);
+        drawRipples();
         Gfx.end();
         m.popMatrix();
+    }
+
+    /** Four additive glows drifting behind the window: cheap, always moving, and different every second. */
+    private void drawAmbient(Theme t) {
+        if (!animated()) return;
+        double now = Time.seconds();
+        float cx = winX + winW / 2f, cy = winY + winH / 2f;
+        int[] cols = {t.accent(), t.accent2(), t.accent3()};
+        for (int i = 0; i < 4; i++) {
+            double ph = now * (0.13 + i * 0.035) + i * 1.7;
+            float x = cx + (float) Math.cos(ph) * (winW * 0.42f);
+            float y = cy + (float) Math.sin(ph * 1.3) * (winH * 0.36f);
+            Gfx.light(x, y, 130 + i * 26, Colors.withAlpha(cols[i % 3], 0x18));
+        }
+    }
+
+    /** Expanding rings where the mouse last clicked. */
+    private void drawRipples() {
+        long now = System.currentTimeMillis();
+        ripples.removeIf(r -> now - (long) r[2] > 620);
+        for (float[] r : ripples) {
+            float p = Anim.clamp01((now - r[2]) / 620f);
+            float rad = 5 + 92 * Anim.easeOutCubic(p);
+            Gfx.ring(r[0], r[1], rad, 2, Colors.withAlpha(Themes.current().accent(), (int) (0xB4 * (1 - p))));
+            Gfx.ring(r[0], r[1], rad * 0.6f, 1, Colors.withAlpha(0xFFFFFFFF, (int) (0x5A * (1 - p))));
+        }
     }
 
     // ------------------------------------------------------------------ dock
@@ -294,11 +324,14 @@ public class ClickGuiScreen extends Screen {
         float x = cx - size / 2, y = cy - size / 2;
         boolean hov = over(x, y, size, size);
         if (sel) {
+            float pulse = animated() ? 1f + 0.05f * (float) Math.sin(Time.seconds() * 3.4) : 1f;
+            Gfx.pushPlace(cx, cy, cx, cy, pulse);
             Gfx.shadow(x, y, size, size, size / 2, 9, Colors.withAlpha(t.accent3(), 0x60));
             Gfx.shadow(x, y, size, size, size / 2, 5, Colors.withAlpha(t.accent(), 0x70));
             Gfx.roundGradientH(x, y, size, size, size / 2, Colors.withAlpha(t.accent(), 0xE0), Colors.withAlpha(t.accent2(), 0xE0));
             Gfx.roundGradient(x, y, size, size * 0.5f, size / 2, 0x40FFFFFF, 0x00FFFFFF);
             Gfx.outline(x, y, size, size, size / 2, 1, 0x90FFFFFF, 0x20FFFFFF);
+            Gfx.popPlace();
         } else if (hov) {
             Gfx.round(x, y, size, size, size / 2, 0x1CFFFFFF);
         }
@@ -449,6 +482,11 @@ public class ClickGuiScreen extends Screen {
         }
         Gfx.shadow(x, cy + 2 + hv * 2, w, h, r, 8 + hv * 6, Colors.withAlpha(0x000000, (int) (0x40 + 0x28 * hv)));
         Gfx.glassBody(t, x, cy, w, h, r, 0.32f + 0.1f * hv);
+        if (hv > 0.01f) {
+            // A soft light that follows the cursor inside the card, so the surface feels alive under the mouse.
+            Gfx.glow(mx, my, 48, Colors.withAlpha(t.accent(), (int) (0x26 * hv)));
+            Gfx.glow(mx, my, 18, Colors.withAlpha(0xFFFFFFFF, (int) (0x12 * hv)));
+        }
         if (on > 0.01f) {
             Gfx.roundGradientH(x, cy, w, h, r, Colors.withAlpha(t.accent(), (int) (0x22 * on)), Colors.withAlpha(t.accent2(), (int) (0x08 * on)));
             Gfx.outline(x, cy, w, h, r, 1, Colors.withAlpha(t.accent(), (int) (0xE0 * on)), Colors.withAlpha(t.accent3(), (int) (0xB0 * on)));
@@ -944,6 +982,7 @@ public class ClickGuiScreen extends Screen {
         float[] lc = toLocal(click.x(), click.y());
         float x = lc[0], y = lc[1];
         int button = click.button();
+        if (animated()) ripples.add(new float[]{x, y, System.currentTimeMillis()});
         // Resolve the click first: while a bind is armed the next click is normally the new key, but a click that
         // lands on another control (the hold switch, the place bind, close) must act on that control instead of
         // being eaten as a mouse bind.

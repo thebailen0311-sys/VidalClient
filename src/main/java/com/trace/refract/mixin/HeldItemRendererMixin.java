@@ -96,11 +96,13 @@ public abstract class HeldItemRendererMixin {
         String style = c == null ? "Slash" : c.swingStyle.get();
         matrices.push();
         refract$customSwing(matrices, arm, swingProgress, style);
+        refract$drawPose(matrices);
         renderArmHoldingItem(matrices, queue, light, equipProgress, 0f, arm);
         matrices.pop();
         // Same pose again, then into the arm bone (pivot) and the held-item placement used for third person.
         matrices.push();
         refract$customSwing(matrices, arm, swingProgress, style);
+        refract$drawPose(matrices);
         refract$armPose(matrices, arm, equipProgress, 0f);
         matrices.translate(f * -5f / 16f, 2f / 16f, 0f);
         matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(-90f));
@@ -117,6 +119,17 @@ public abstract class HeldItemRendererMixin {
         }
         matrices.pop();
         ci.cancel();
+    }
+
+    /** The arm snaps up and rolls as the knife leaves the sheath, then settles into the resting pose. */
+    @Unique
+    private static void refract$drawPose(MatrixStack m) {
+        float t = (com.trace.refract.util.Time.seconds() - KnifeRenderer.drawStart) / 0.55f;
+        if (t < 0 || t >= 1) return;
+        float e = 1 - com.trace.refract.util.Anim.easeOutCubic(t);
+        m.translate(0, 0.11f * e, -0.07f * e);
+        m.multiply(RotationAxis.POSITIVE_X.rotationDegrees(20f * e));
+        m.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(-12f * e));
     }
 
     /**

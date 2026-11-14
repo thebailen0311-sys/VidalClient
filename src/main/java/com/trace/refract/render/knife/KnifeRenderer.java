@@ -79,11 +79,35 @@ public final class KnifeRenderer implements SpecialModelRenderer<Void> {
         boolean fp = inHand || ctx == ItemDisplayContext.FIRST_PERSON_RIGHT_HAND || ctx == ItemDisplayContext.FIRST_PERSON_LEFT_HAND;
         if (fp) {
             float now = Time.seconds();
-            float d = (now - drawStart) / 0.5f;
+            float dur = switch (kind) { case "butterfly" -> 1.0f; case "karambit" -> 0.9f; case "tactical" -> 0.55f; default -> 0.65f; };
+            float d = (now - drawStart) / dur;
+            float[] piv = mesh.pivot;
             if (d >= 0 && d < 1) {
-                float e = 1 - Anim.easeOutBack(d);
-                m.translate(0, -7 * e, 0);
-                about(m, 4, 4, new Quaternionf().rotateZ((float) Math.toRadians(-85 * e)));
+                // Every knife gets its own draw: a butterfly flips its handles open mid-twirl, a karambit spins
+                // twice around the index finger, the straight knives toss end over end.
+                switch (kind) {
+                    case "butterfly" -> {
+                        float e = Anim.easeOutCubic(d);
+                        m.translate(1.3f * (float) Math.sin(Math.PI * d), -6f * (1 - e), -1.2f * (1 - e));
+                        about(m, piv[0], piv[1], new Quaternionf()
+                                .rotateZ((float) Math.toRadians(-540 * e))
+                                .rotateX((float) Math.toRadians(360 * Anim.easeInOutCubic(d))));
+                        latch = -175 * Anim.easeOutCubic(Anim.clamp01(d / 0.32f))
+                                + 175 * Anim.easeInOutCubic(Anim.clamp01((d - 0.72f) / 0.28f));
+                    }
+                    case "karambit" -> {
+                        float e = Anim.easeOutCubic(d);
+                        m.translate(0, -5 * (1 - e), 0);
+                        about(m, piv[0], piv[1], new Quaternionf()
+                                .rotateZ((float) Math.toRadians(-720 * e))
+                                .rotateY((float) Math.toRadians(70 * (float) Math.sin(Math.PI * d))));
+                    }
+                    default -> {
+                        float e = 1 - Anim.easeOutBack(d);
+                        m.translate(0, -7 * e, 0);
+                        about(m, 4, 4, new Quaternionf().rotateZ((float) Math.toRadians(-85 * e)));
+                    }
+                }
             }
             // Swing motion itself is applied to the whole hand by HeldItemRendererMixin, so it replaces the vanilla
             // swipe instead of stacking on it. What stays here is the per-knife idle life, which the hand should not
@@ -101,7 +125,9 @@ public final class KnifeRenderer implements SpecialModelRenderer<Void> {
                     case "butterfly" -> {
                         latch = -360 * Anim.easeInOutCubic(Anim.clamp01(t / 0.45f)) + 360 * Anim.easeInOutCubic(Anim.clamp01((t - 0.62f) / 0.38f));
                         float roll = 360 * Anim.easeInOutCubic(Anim.clamp01((t - 0.3f) / 0.45f));
-                        about(m, p[0], p[1], new Quaternionf().rotateAxis((float) Math.toRadians(roll), 0.7071f, 0.7071f, 0));
+                        about(m, p[0], p[1], new Quaternionf()
+                                .rotateAxis((float) Math.toRadians(roll), 0.7071f, 0.7071f, 0)
+                                .rotateY((float) Math.toRadians(540 * Anim.easeInOutCubic(t))));
                     }
                     default -> {
                         m.translate(0, (float) Math.sin(Math.PI * t) * 5, 0);
