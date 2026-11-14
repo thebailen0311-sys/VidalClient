@@ -432,7 +432,7 @@ public class ClickGuiScreen extends Screen {
         // Chevron (rotates open) and key chip.
         Gfx.arrow(right - 4, y + h / 2, 7, (float) (Math.PI / 2 * ex), Colors.withAlpha(t.textDim(), 0xC0));
         right -= 14;
-        if (mod.key >= 0 && listening != mod) {
+        if (mod.key != -1 && listening != mod) {
             String k = keyName(mod.key) + (mod.hold ? " ·  hold" : "");
             float kw = Gfx.width(k, Gfx.SMALL - 0.5f, Font.Weight.BOLD) + 10;
             Gfx.round(right - kw, y + h / 2 - 6, kw, 12, 6, 0x1EFFFFFF);

@@ -154,13 +154,28 @@ public final class LiveTest {
             // Only the combat specs get a dummy: one parked in front of the player blocks the crosshair and is
             // exactly where the placement modules need to work, which ruined those runs.
             if (SPEC.equals("tbot") || SPEC.equals("stap")) {
-                cmd(mc, "execute at @s anchored eyes run summon minecraft:zombie ^ ^ ^2 {NoAI:1b,NoGravity:1b,Silent:1b,PersistenceRequired:1b}");
+                cmd(mc, "kill @e[type=minecraft:zombie]");
+                cmd(mc, "execute at @s anchored eyes run summon minecraft:zombie ^ ^ ^2 {NoAI:1b,NoGravity:1b,Silent:1b,PersistenceRequired:1b,Tags:[\"ltarget\"]}");
             }
             log("setup commands sent");
         }
 
         switch (SPEC) {
             case "tbot" -> {
+                // Aim at the practice zombie like a player would, otherwise the crosshair sits on the floor and the
+                // module (correctly) refuses to swing.
+                if (ticks > 55 && mc.world != null && mc.player != null) {
+                    var zombies = mc.world.getEntitiesByClass(net.minecraft.entity.mob.ZombieEntity.class,
+                            mc.player.getBoundingBox().expand(6), e -> true);
+                    if (!zombies.isEmpty()) {
+                        var z = zombies.get(0);
+                        net.minecraft.util.math.Vec3d c = z.getBoundingBox().getCenter();
+                        net.minecraft.util.math.Vec3d eye = mc.player.getEyePos();
+                        double dx = c.x - eye.x, dy = c.y - eye.y, dz = c.z - eye.z;
+                        mc.player.setYaw((float) (Math.toDegrees(Math.atan2(dz, dx)) - 90));
+                        mc.player.setPitch((float) -Math.toDegrees(Math.atan2(dy, Math.sqrt(dx * dx + dz * dz))));
+                    }
+                }
                 if (ticks == 55) {
                     StringBuilder bar = new StringBuilder();
                     for (int i = 0; i < 9; i++) {
@@ -287,6 +302,14 @@ public final class LiveTest {
                     }
                     log("base t=" + ticks + " n=" + ModuleManager.baseFinder.candidates.size() + " [" + sb + "]");
                 }
+            }
+            case "gui" -> {
+                if (ticks == 20) { cmd(mc, "gamemode creative"); enable("ambience", true); log("ambience on"); }
+                if (ticks == 40) { mc.setScreen(new com.trace.refract.gui.ClickGuiScreen()); log("gui open"); }
+                if (ticks == 70) { mc.setScreen(null); log("gui closed -> " + (mc.currentScreen == null)); }
+                if (ticks == 110) { mc.setScreen(new com.trace.refract.gui.ClickGuiScreen()); log("gui open 2"); }
+                if (ticks == 150) { mc.setScreen(null); log("gui closed 2"); }
+                if (ticks > 60 && ticks % 30 == 0) log("tick " + ticks + " alive, screen=" + mc.currentScreen);
             }
             case "ambience" -> {
                 if (ticks == 20) {

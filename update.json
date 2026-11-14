@@ -1,5 +1,5 @@
 {
-  "version": "1.0.1",
-  "notes": "Fixed a crash when Ambience's colour grade started drawing after closing the GUI. Also stops Base Finder treating a lone chest as a stash or vault.",
-  "jar": "dist/vanta-1.0.1.jar"
+  "version": "1.0.2",
+  "notes": "Combat actions are now sent before the movement packet (the ordering Grim's Post check reports), mouse binds show on module cards, and the Ambience crash is fixed.",
+  "jar": "dist/vanta-1.0.2.jar"
 }

@@ -42,12 +42,16 @@ public class Refract implements ClientModInitializer {
         KeyBinding.Category cat = KeyBinding.Category.create(Identifier.of(ID, "main"));
         guiKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.refract.clickgui", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_RIGHT_SHIFT, cat));
 
+        // Modules run at the START of the tick, before the client sends its movement packet. Vanilla sends clicks
+        // and placements from the same early phase; doing it at the end made every attack and placement arrive
+        // after the movement packet, which is exactly what Grim's Post check reports.
+        ClientTickEvents.START_CLIENT_TICK.register(mc -> ModuleManager.tick(mc));
+
         ClientTickEvents.END_CLIENT_TICK.register(mc -> {
             while (guiKey.wasPressed()) {
                 if (mc.currentScreen == null) mc.setScreen(new ClickGuiScreen());
             }
             LiveTest.tick(mc);
-            ModuleManager.tick(mc);
             com.trace.refract.util.Rotations.endTick();
             long ts = System.nanoTime();
             WorldScanner.tick(mc);
