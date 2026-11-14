@@ -10,3 +10,7 @@ dist/*.part
 drv-*.txt
 flags-*.txt
 lt-*.log
+*.zip
+grimac-fabric-*.jar
+fabric-api-*.jar
+grimlibs/
