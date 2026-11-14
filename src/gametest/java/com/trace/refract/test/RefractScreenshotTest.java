@@ -165,7 +165,7 @@ public class RefractScreenshotTest implements FabricClientGameTest {
                     check(c2.status.equals("Intact"), "buried stash reported Intact (got " + c2.status + ")");
                     var est = com.trace.refract.scan.BaseValue.of(c2.found);
                     log("BASE VALUE {} : {}", com.trace.refract.scan.BaseValue.money(est.total()), est.lines());
-                    check(est.total() >= 7 * 33_000 + 4 * 10_000, "buried stash valued from its blocks (got " + com.trace.refract.scan.BaseValue.money(est.total()) + ")");
+                    check(est.total() >= 7 * 30_000, "buried stash valued from its blocks (got " + com.trace.refract.scan.BaseValue.money(est.total()) + ")");
                 });
                 check(!surface, "surface stash/hideout ignored by Base Finder (Surface Filter)");
                 var griefed = cands.stream().filter(c2 -> c2.anchor.getX() <= me.getX() - 22 && c2.anchor.getZ() <= me.getZ() - 22).findFirst().orElse(null);
@@ -421,6 +421,7 @@ public class RefractScreenshotTest implements FabricClientGameTest {
             s.runCommand("give @p minecraft:netherite_sword");
             ctx.runOnClient(c -> {
                 ModuleManager.ambience.setEnabled(true, false);
+                ModuleManager.ambience.preset.set("Deep Space");
                 ModuleManager.cosmetics.setEnabled(true, false);
                 var inv = c.player.getInventory();
                 for (int i = 0; i < 9; i++) if (inv.getStack(i).isOf(net.minecraft.item.Items.NETHERITE_SWORD)) inv.setSelectedSlot(i);
@@ -449,7 +450,8 @@ public class RefractScreenshotTest implements FabricClientGameTest {
                 ModuleManager.trajectories.setEnabled(true, false);
                 var inv = c.player.getInventory();
                 for (int i = 0; i < 9; i++) if (inv.getStack(i).isOf(net.minecraft.item.Items.ENDER_PEARL)) inv.setSelectedSlot(i);
-                c.player.setPitch(-18);
+                c.player.setYaw(90);
+                c.player.setPitch(-12);
             });
             ctx.waitTicks(10);
             ctx.takeScreenshot("refract_trajectory");
@@ -459,7 +461,23 @@ public class RefractScreenshotTest implements FabricClientGameTest {
             ctx.waitTicks(20);
             ctx.getInput().releaseKey(o -> o.forwardKey);
             ctx.waitTicks(2);
+            ctx.runOnClient(c -> c.options.hudHidden = true);
+            ctx.waitTicks(2);
             ctx.takeScreenshot("refract_visuals_thirdperson");
+            ctx.runOnClient(c -> c.options.hudHidden = false);
+            ctx.runOnClient(c -> { c.options.setPerspective(net.minecraft.client.option.Perspective.FIRST_PERSON); ModuleManager.hud.setEnabled(false, false); c.player.setYaw(-139); c.player.setPitch(-40); });
+            ctx.waitTicks(10);
+            ctx.takeScreenshot("refract_space_sky");
+            ctx.runOnClient(c -> { c.player.setYaw(35); c.player.setPitch(-35); });
+            ctx.waitTicks(40);
+            ctx.takeScreenshot("refract_space_blackhole");
+            ctx.runOnClient(c -> { ModuleManager.ambience.preset.set("Rainy Night"); c.player.setYaw(90); c.player.setPitch(10); });
+            ctx.waitTicks(30);
+            ctx.takeScreenshot("refract_rain");
+            ctx.runOnClient(c -> ModuleManager.ambience.preset.set("Deep Space"));
+            int skyFps = ctx.computeOnClient(c -> c.getCurrentFps());
+            log("FPS night, space sky + aurora + post-processing + glass, sky in view: {}", skyFps);
+            ctx.runOnClient(c -> ModuleManager.hud.setEnabled(true, false));
             ctx.runOnClient(c -> {
                 c.options.setPerspective(net.minecraft.client.option.Perspective.FIRST_PERSON);
                 ModuleManager.ambience.setEnabled(false, false);

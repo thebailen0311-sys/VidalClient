@@ -303,6 +303,15 @@ public final class LiveTest {
                     log("base t=" + ticks + " n=" + ModuleManager.baseFinder.candidates.size() + " [" + sb + "]");
                 }
             }
+            case "hud" -> {
+                if (ticks == 20) {
+                    cmd(mc, "gamemode creative");
+                    enable("custom bars", true);
+                    enable("cosmetics", true);
+                    log("custom bars + cosmetics on");
+                }
+                if (ticks > 60 && ticks % 60 == 0) log("hud alive t=" + ticks);
+            }
             case "gui" -> {
                 if (ticks == 20) { cmd(mc, "gamemode creative"); enable("ambience", true); log("ambience on"); }
                 if (ticks == 40) { mc.setScreen(new com.trace.refract.gui.ClickGuiScreen()); log("gui open"); }

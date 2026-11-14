@@ -15,6 +15,9 @@ public record Theme(String name, int accent, int accent2, int glassTop, int glas
                 Colors.lerp(a.blobB, b.blobB, t), Colors.lerp(a.blobC, b.blobC, t));
     }
 
+    /** The theme's third colour (see {@link Themes#THIRD}); falls back to a hue between the two accents. */
+    public int accent3() { return Themes.third(this); }
+
     /** Accent gradient sample, t in [0,1]. */
     public int gradient(float t) {
         float s = (float) (0.5 + 0.5 * Math.sin(t * Math.PI * 2));

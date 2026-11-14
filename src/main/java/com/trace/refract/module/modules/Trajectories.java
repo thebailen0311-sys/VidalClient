@@ -39,7 +39,10 @@ public class Trajectories extends Module {
 
     private final List<Object[]> pearlLabels = new ArrayList<>();
 
-    public Trajectories() { super("Trajectories", "Arc and landing spot for pearls, potions, bows, tridents, plus where thrown pearls land.", Category.RENDER); }
+    public Trajectories() {
+        super("Trajectories", "Glowing arc and landing ring for pearls, potions, bows, tridents, plus where thrown pearls land.", Category.RENDER);
+        net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents.AFTER_ENTITIES.register(this::drawRibbons);
+    }
 
     /** Vanilla projectile physics: move, then drag, then gravity, checking blocks and entities along each step. */
     private Path simulate(Vec3d pos, Vec3d vel, double gravity, double drag, Entity owner) {
@@ -109,33 +112,88 @@ public class Trajectories extends Module {
         }
     }
 
+    /** Paths to draw this frame as light ribbons: {points, c1, c2, hitPos or null, face normal or null, skip}. */
+    private final List<Object[]> ribbons = new ArrayList<>();
+
     private void draw(Path path, int c1, int c2, int skip) {
-        List<Vec3d> pts = path.points();
-        int n = pts.size();
-        for (int i = Math.max(1, skip); i < n; i++) {
-            float f = (float) i / Math.max(1, n - 1);
-            int col = Colors.lerp(c1, c2, f);
-            Esp.line(pts.get(i - 1), pts.get(i), Colors.withAlpha(col, 0x40), 5f, false);
-            Esp.line(pts.get(i - 1), pts.get(i), Colors.withAlpha(col, 0xF0), 2f, false);
-        }
-        Vec3d end = pts.get(n - 1);
+        Vec3d hit = null, nrm = null;
         if (path.hitEntity() != null) {
             Esp.box(path.hitEntity().getBoundingBox(), Colors.withAlpha(c2, 0x30), Colors.withAlpha(c2, 0xF0), 2f, true);
         } else if (path.hit() instanceof BlockHitResult bh) {
-            // A glowing ring flat on the face it lands on.
             Direction f = bh.getSide();
-            Vec3d nrm = new Vec3d(f.getOffsetX(), f.getOffsetY(), f.getOffsetZ());
-            Vec3d u = Math.abs(nrm.y) > 0.5 ? new Vec3d(1, 0, 0) : new Vec3d(0, 1, 0);
-            Vec3d v = nrm.crossProduct(u);
-            Vec3d c = end.add(nrm.multiply(0.02));
-            for (int i = 0; i < 24; i++) {
-                double a0 = i * Math.PI * 2 / 24, a1 = (i + 1) * Math.PI * 2 / 24;
-                Vec3d p0 = c.add(u.multiply(Math.cos(a0) * 0.45)).add(v.multiply(Math.sin(a0) * 0.45));
-                Vec3d p1 = c.add(u.multiply(Math.cos(a1) * 0.45)).add(v.multiply(Math.sin(a1) * 0.45));
-                Esp.line(p0, p1, Colors.withAlpha(c2, 0xF0), 2.5f, true);
-            }
-            Esp.block(BlockPos.ofFloored(end.subtract(nrm.multiply(0.01))), 0, Colors.withAlpha(c1, 0x22), Colors.withAlpha(c1, 0x90), 1.25f, true);
+            hit = path.points().get(path.points().size() - 1);
+            nrm = new Vec3d(f.getOffsetX(), f.getOffsetY(), f.getOffsetZ());
         }
+        ribbons.add(new Object[]{path.points(), c1, c2, hit, nrm, skip});
+    }
+
+    /**
+     * Light ribbons (additive glow): a soft wide glow under a bright core, always facing the camera, with energy pulses
+     * running along the arc toward where it lands, and a pulsing ring of light flat on the landing face.
+     */
+    private void drawRibbons(net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderContext ctx) {
+        if (!isEnabled() || ribbons.isEmpty() || ctx.matrices() == null || ctx.consumers() == null) { ribbons.clear(); return; }
+        Vec3d cam = mc.gameRenderer.getCamera().getCameraPos();
+        var layer = net.minecraft.client.render.RenderLayers.lightning();
+        var vc = ctx.consumers().getBuffer(layer);
+        var e = ctx.matrices().peek();
+        float time = com.trace.refract.util.Time.seconds();
+        for (Object[] rb : ribbons) {
+            @SuppressWarnings("unchecked") List<Vec3d> pts = (List<Vec3d>) rb[0];
+            int c1 = (int) rb[1], c2 = (int) rb[2], skip = (int) rb[5];
+            double along = 0;
+            for (int i = Math.max(1, skip); i < pts.size(); i++) {
+                Vec3d a = pts.get(i - 1).subtract(cam), b = pts.get(i).subtract(cam);
+                double segLen = b.distanceTo(a);
+                Vec3d dir = b.subtract(a);
+                Vec3d side = dir.crossProduct(a.add(b).multiply(0.5)).normalize();
+                float f = (float) i / Math.max(1, pts.size() - 1);
+                int col = Colors.lerp(c1, c2, f);
+                float pulse = (float) Math.max(0, 1 - Math.abs(((along - time * 7) % 3.0 + 3.0) % 3.0 - 1.5) / 0.35);
+                for (int pass = 0; pass < 2; pass++) {
+                    double w = pass == 0 ? 0.16 : 0.035 + 0.02 * pulse;
+                    int alpha = pass == 0 ? (int) (60 + 70 * pulse) : (int) (200 + 55 * pulse);
+                    int cc = Colors.withAlpha(pass == 0 ? col : Colors.lerp(col, 0xFFFFFFFF, 0.45f + 0.4f * pulse), Math.min(255, alpha));
+                    int edge = Colors.withAlpha(col, 0);
+                    Vec3d s0 = side.multiply(w);
+                    quad(vc, e, a.add(s0), a, b, b.add(s0), edge, cc, cc, edge);
+                    quad(vc, e, a, a.subtract(s0), b.subtract(s0), b, cc, edge, edge, cc);
+                }
+                along += segLen;
+            }
+            if (rb[3] instanceof Vec3d hit && rb[4] instanceof Vec3d nrm) {
+                Vec3d u = Math.abs(nrm.y) > 0.5 ? new Vec3d(1, 0, 0) : new Vec3d(0, 1, 0);
+                Vec3d v = nrm.crossProduct(u);
+                Vec3d c = hit.add(nrm.multiply(0.03)).subtract(cam);
+                for (int ring = 0; ring < 2; ring++) {
+                    double ph = ((time * 0.9 + ring * 0.5) % 1.0);
+                    double r0 = 0.15 + ph * 0.6, r1 = r0 + 0.08;
+                    int ca = Colors.withAlpha(c2, (int) (230 * (1 - ph)));
+                    for (int k = 0; k < 32; k++) {
+                        double a0 = k * Math.PI * 2 / 32, a1 = (k + 1) * Math.PI * 2 / 32;
+                        Vec3d d0 = u.multiply(Math.cos(a0)).add(v.multiply(Math.sin(a0))), d1 = u.multiply(Math.cos(a1)).add(v.multiply(Math.sin(a1)));
+                        quad(vc, e, c.add(d0.multiply(r0)), c.add(d0.multiply(r1)), c.add(d1.multiply(r1)), c.add(d1.multiply(r0)), ca, Colors.withAlpha(c2, 0), Colors.withAlpha(c2, 0), ca);
+                    }
+                }
+                // Steady bright centre dot.
+                int core = Colors.withAlpha(Colors.lerp(c2, 0xFFFFFFFF, 0.5f), 0xF0);
+                for (int k = 0; k < 16; k++) {
+                    double a0 = k * Math.PI * 2 / 16, a1 = (k + 1) * Math.PI * 2 / 16;
+                    Vec3d d0 = u.multiply(Math.cos(a0)).add(v.multiply(Math.sin(a0))), d1 = u.multiply(Math.cos(a1)).add(v.multiply(Math.sin(a1)));
+                    quad(vc, e, c, c.add(d0.multiply(0.12)), c.add(d1.multiply(0.12)), c, core, Colors.withAlpha(c2, 0), Colors.withAlpha(c2, 0), core);
+                }
+            }
+        }
+        ribbons.clear();
+        if (ctx.consumers() instanceof net.minecraft.client.render.VertexConsumerProvider.Immediate imm) imm.draw(layer);
+    }
+
+    private static void quad(net.minecraft.client.render.VertexConsumer vc, net.minecraft.client.util.math.MatrixStack.Entry e,
+                             Vec3d p0, Vec3d p1, Vec3d p2, Vec3d p3, int c0, int c1, int c2, int c3) {
+        Vec3d[] p = {p0, p1, p2, p3};
+        int[] c = {c0, c1, c2, c3};
+        for (int i = 0; i < 4; i++) vc.vertex(e, (float) p[i].x, (float) p[i].y, (float) p[i].z).color(c[i]);
+        for (int i = 3; i >= 0; i--) vc.vertex(e, (float) p[i].x, (float) p[i].y, (float) p[i].z).color(c[i]);
     }
 
     @Override public void onHud(Theme t, float sw, float sh) {

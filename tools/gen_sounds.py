@@ -1,4 +1,4 @@
-"""Synthesizes Refract's UI sounds as OGG Vorbis into src/main/resources/assets/refract/sounds/ui/.
+"""Synthesizes Vanta's UI sounds as OGG Vorbis into src/main/resources/assets/refract/sounds/ui/.
 
 Chill set: soft kalimba/marimba plucks and airy chords, warm low-passed, with a gentle room tail.
 Nothing harsh, nothing loud; hovers and clicks are barely-there ticks.
@@ -59,7 +59,7 @@ def lowpass(sig, cutoff):
     return out
 
 
-def reverb(sig, length=0.6, wet=0.3):
+def reverb(sig, length=1.1, wet=0.4):
     n = int(SR * length)
     ir = np.random.default_rng(3).standard_normal(n) * np.exp(-np.arange(n) / (SR * length / 5))
     ir = lowpass(ir, 3500)
@@ -70,9 +70,11 @@ def reverb(sig, length=0.6, wet=0.3):
     return dry * (1 - wet) + tail * wet * 7
 
 
-def save(name, sig, gain, cutoff=3200, room=0.3):
+def save(name, sig, gain, cutoff=2300, room=0.42):
+    gain *= 0.85
     sig = lowpass(lowpass(sig, cutoff), cutoff * 1.4)
     sig = reverb(sig, wet=room)
+    sig = lowpass(sig, cutoff * 1.6)
     sig = sig / (np.max(np.abs(sig)) + 1e-9) * gain
     fade = int(SR * 0.03)
     sig[-fade:] *= np.linspace(1, 0, fade)
@@ -80,8 +82,9 @@ def save(name, sig, gain, cutoff=3200, room=0.3):
 
 
 os.makedirs(OUT, exist_ok=True)
-E5, G5, A5, B5, Cs6, D6, E6 = 659.3, 784.0, 880.0, 987.8, 1108.7, 1174.7, 1318.5
-A4, Cs5, C4, E4 = 440.0, 554.4, 261.6, 329.6
+# A fourth lower than before: rounder, calmer.
+E5, G5, A5, B5, Cs6, D6, E6 = [f * 0.75 for f in (659.3, 784.0, 880.0, 987.8, 1108.7, 1174.7, 1318.5)]
+A4, Cs5, C4, E4 = [f * 0.75 for f in (440.0, 554.4, 261.6, 329.6)]
 
 save('hover', pluck(1760, 0.05, 0.008, attack=0.003, partials=((1, 1.0),)), 0.05, cutoff=2600, room=0.1)
 save('click', pluck(1175, 0.08, 0.018, attack=0.002, partials=((1, 1.0), (2, 0.1))), 0.16, cutoff=2400, room=0.15)

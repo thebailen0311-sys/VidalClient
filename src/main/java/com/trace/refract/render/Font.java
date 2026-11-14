@@ -22,7 +22,7 @@ import java.util.Map;
  */
 public final class Font {
     public enum Weight {
-        REGULAR("inter-medium.ttf"), SEMIBOLD("inter-semibold.ttf"), BOLD("inter-bold.ttf");
+        REGULAR("manrope-medium.ttf"), SEMIBOLD("manrope-semibold.ttf"), BOLD("manrope-bold.ttf");
 
         final String file;
 

@@ -88,7 +88,7 @@ public class StorageEsp extends Module {
                 Esp.gradientBox(boxOf(it.block.pos()), Colors.withAlpha(col, 0x3A), Colors.withAlpha(col, 0x06), 2f, walls, 3);
                 if (i < 16) Esp.glow(boxOf(it.block.pos()), col, walls);
             } else {
-                Esp.block(it.block.pos(), 0.0625, Colors.withAlpha(col, 0x30), Colors.withAlpha(col, 0xE6), 2f, walls);
+                Esp.prettyBlock(it.block.pos(), 0.0625, col, walls);
             }
             i++;
             if (origin != null) Esp.line(origin, it.block.pos().toCenterPos(), Colors.withAlpha(col, 0x90), 1.5f, true);

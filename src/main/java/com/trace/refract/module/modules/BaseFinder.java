@@ -231,14 +231,20 @@ public class BaseFinder extends Module {
             // A single chest, furnace or shulker is scenery, not a base. Require real container evidence before
             // a cluster is allowed to become a candidate at all.
             int containers = n(c, "Chest") + n(c, "Trapped Chest") + n(c, "Barrel") + n(c, "Shulker Box")
-                    + n(c, "Ender Chest") + n(c, "Spawner") + n(c, "Hopper") + n(c, "Furnace")
+                    + n(c, "Spawner") + n(c, "Hopper") + n(c, "Furnace")
                     + n(c, "Blast Furnace") + n(c, "Smoker") + n(c, "Dropper/Dispenser");
             // Real bases are built of containers; anything with fewer must carry high-value evidence of its own
             // (a carried-in spawner, a beacon, an anchor, netherite, dug-out deepslate) to count. One chest in a
             // stone hut is scenery and used to slip through as a "Stash".
             int highValue = n(c, "Spawner") + n(c, "Beacon") + n(c, "Respawn Anchor")
                     + n(c, "Netherite Block") + n(c, "Rotated Deepslate");
-            if (containers < 3 && highValue == 0) continue;
+            // A griefed base has no containers left by definition: let a dug-out room with varied placed blocks, or an
+            // emptied cavity with scraps, through on its own evidence.
+            float builtSum = 0;
+            int placed = 0, dug = 0;
+            for (ChunkReport r : c.chunks) { builtSum += builtScore(r); placed += r.placements; dug += r.excavated; }
+            boolean griefedEvidence = (n(c, "Dug-out Room") > 0 && builtSum >= 3) || (dug >= 80 && placed >= 2 && builtSum > 0);
+            if (containers < 3 && highValue == 0 && !griefedEvidence) continue;
             c.confidence = Confidence.fromScore(c.total, 16);
             c.heat = Math.min(1f, c.total / 26f);
             c.level = Confidence.level(c.confidence);
@@ -298,7 +304,7 @@ public class BaseFinder extends Module {
     /** Container-like blocks: the minimum evidence before anything counts as a base. */
     public static int containers(Candidate c) {
         return n(c, "Chest") + n(c, "Trapped Chest") + n(c, "Barrel") + n(c, "Shulker Box")
-                + n(c, "Ender Chest") + n(c, "Spawner") + n(c, "Hopper") + n(c, "Furnace")
+                + n(c, "Spawner") + n(c, "Hopper") + n(c, "Furnace")
                 + n(c, "Blast Furnace") + n(c, "Smoker") + n(c, "Dropper/Dispenser");
     }
 
@@ -344,8 +350,10 @@ public class BaseFinder extends Module {
             c.type = "Raid Base";
         } else if (hoppers >= 4 && chests >= 3) {
             c.type = "Farm Stash";
-        } else if (shulk + ender >= 4 && chests >= 4 && redstone < 6) {
+        } else if (shulk >= 4 && chests >= 4 && redstone < 6) {
             c.type = "Vault";
+        } else if (shulk >= 3 && redstone < 6) {
+            c.type = "Stash";
         } else if (strongStorage == 0 && chests <= 2 && tunnel >= 24 && (built > 0 || swept)) {
             c.type = "Sus Tunnel";
         } else if (strongStorage == 0 && chests <= 2 && (built > 0 || swept) && (rooms > 0 || built >= 5 || swept)) {

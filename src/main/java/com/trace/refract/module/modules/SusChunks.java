@@ -107,10 +107,10 @@ public class SusChunks extends Module {
             Esp.gradientBox(new Box(h.focus, h.focus).expand(0.3), Colors.withAlpha(col, 0x70), Colors.withAlpha(col, 0x10), 1.5f, walls, 3);
             Esp.corners(new Box(h.focus, h.focus).expand(0.35), Colors.withAlpha(col, 0xE0), 1.25f, walls);
             if (!evidence.on()) continue;
-            for (ChunkReport.KelpColumn k : r.grownKelp) { if (ev++ < 300) Esp.block(k.top(), 0.12, 0x283DFF8A, 0xC83DFF8A, 1.25f, walls); }
-            if (r.geodeMature) for (BlockPos p : r.clusterEvidence) { if (ev++ < 300) Esp.block(p, 0.18, 0x30C77DFF, 0xD0C77DFF, 1.25f, walls); }
-            if (r.pRotated > 0) for (BlockPos p : r.rotatedEvidence) { if (ev++ < 300) Esp.block(p, 0.02, 0x30FF9A3D, 0xE0FF9A3D, 1.25f, walls); }
-            if (r.pTunnel > 0) for (Box t : r.tunnels) { if (ev++ < 300) Esp.box(t, 0x1838BDF8, 0xB038BDF8, 1.25f, walls); }
+            for (ChunkReport.KelpColumn k : r.grownKelp) { if (ev++ < 300) Esp.prettyBlock(k.top(), 0.12, 0xFF3DFF8A, walls); }
+            if (r.geodeMature) for (BlockPos p : r.clusterEvidence) { if (ev++ < 300) Esp.prettyBlock(p, 0.18, 0xFFC77DFF, walls); }
+            if (r.pRotated > 0) for (BlockPos p : r.rotatedEvidence) { if (ev++ < 300) Esp.prettyBlock(p, 0.02, 0xFFFF9A3D, walls); }
+            if (r.pTunnel > 0) for (Box t : r.tunnels) { if (ev++ < 300) Esp.pretty(t, 0xFF38BDF8, walls); }
         }
     }
 

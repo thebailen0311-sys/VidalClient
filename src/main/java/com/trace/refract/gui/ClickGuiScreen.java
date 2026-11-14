@@ -149,9 +149,14 @@ public class ClickGuiScreen extends Screen {
 
     private static boolean animated() { return ModuleManager.clickGui.animations.on(); }
 
-    private float localX(double x) { return (float) (width / 2.0 + (x - width / 2.0) / scale); }
+    /** The window transform (open scale + 3D tilt), kept so mouse input maps back through exactly the same matrix. */
+    private final org.joml.Matrix3x2f view = new org.joml.Matrix3x2f(), viewInv = new org.joml.Matrix3x2f();
+    private final Anim tiltX = new Anim(0, 6f), tiltY = new Anim(0, 6f);
 
-    private float localY(double y) { return (float) (height / 2.0 + (y - height / 2.0) / scale); }
+    /** Maps a screen point through the inverse window transform. */
+    private float[] toLocal(double x, double y) {
+        return new float[]{viewInv.m00 * (float) x + viewInv.m10 * (float) y + viewInv.m20, viewInv.m01 * (float) x + viewInv.m11 * (float) y + viewInv.m21};
+    }
 
     private boolean over(float x, float y, float w, float h) { return mx >= x && mx < x + w && my >= y && my < y + h; }
 
@@ -190,8 +195,17 @@ public class ClickGuiScreen extends Screen {
         Theme t = Themes.current();
         float e = openEase();
         scale = 0.96f + 0.04f * e;
-        mx = localX(mouseX);
-        my = localY(mouseY);
+        // 3D tilt: the window leans toward the mouse (a gentle shear that eases), like a pane of glass turning to face you.
+        boolean tiltOn = ModuleManager.clickGui.tilt.on() && animated();
+        tiltX.to(tiltOn ? MathHelper.clamp((mouseX - width / 2f) / (width / 2f), -1, 1) : 0).update(dt);
+        tiltY.to(tiltOn ? MathHelper.clamp((mouseY - height / 2f) / (height / 2f), -1, 1) : 0).update(dt);
+        view.identity().translate(width / 2f, height / 2f).scale(scale, scale)
+                .mul(new org.joml.Matrix3x2f(1f, tiltX.value * -0.035f, tiltY.value * -0.03f, 1f, 0f, 0f))
+                .translate(-width / 2f, -height / 2f);
+        view.invert(viewInv);
+        float[] lm = toLocal(mouseX, mouseY);
+        mx = lm[0];
+        my = lm[1];
 
         winW = Math.min(640, width - 16);
         winH = Math.min(390, height - 16);
@@ -217,9 +231,7 @@ public class ClickGuiScreen extends Screen {
         hits.clear();
         Matrix3x2fStack m = ctx.getMatrices();
         m.pushMatrix();
-        m.translate(width / 2f, height / 2f);
-        m.scale(scale, scale);
-        m.translate(-width / 2f, -height / 2f);
+        m.mul(view);
         Gfx.begin(ctx);
         Gfx.alpha = e;
 
@@ -270,7 +282,7 @@ public class ClickGuiScreen extends Screen {
             cy += step;
         }
         float by = y + h - 10 - bottomItems * (bub + 5) + 5;
-        Gfx.round(x + 10, by - 7, w - 20, 1, 0.5f, 0x1CFFFFFF);
+        Gfx.round(x + 12, by - 4, w - 24, 1, 0.5f, 0x1CFFFFFF);
         Object[][] general = {{Panel.SETTINGS, "Settings"}, {Panel.THEME, "Theme"}, {null, "HUD Editor"}};
         for (Object[] g : general) {
             dockItem(t, x + w / 2, by + bub / 2, bub, g[0] != null && panel == g[0], (String) g[1], 0, null, null, g);
@@ -282,7 +294,8 @@ public class ClickGuiScreen extends Screen {
         float x = cx - size / 2, y = cy - size / 2;
         boolean hov = over(x, y, size, size);
         if (sel) {
-            Gfx.shadow(x, y, size, size, size / 2, 9, Colors.withAlpha(t.accent(), 0x70));
+            Gfx.shadow(x, y, size, size, size / 2, 9, Colors.withAlpha(t.accent3(), 0x60));
+            Gfx.shadow(x, y, size, size, size / 2, 5, Colors.withAlpha(t.accent(), 0x70));
             Gfx.roundGradientH(x, y, size, size, size / 2, Colors.withAlpha(t.accent(), 0xE0), Colors.withAlpha(t.accent2(), 0xE0));
             Gfx.roundGradient(x, y, size, size * 0.5f, size / 2, 0x40FFFFFF, 0x00FFFFFF);
             Gfx.outline(x, y, size, size, size / 2, 1, 0x90FFFFFF, 0x20FFFFFF);
@@ -387,19 +400,86 @@ public class ClickGuiScreen extends Screen {
             cardIn.keySet().retainAll(mods);
             for (int i = 0; i < mods.size(); i++) if (!cardIn.containsKey(mods.get(i))) cardIn.put(mods.get(i), now + (staggerNext ? i * STAGGER_S : 0f));
             staggerNext = false;
+            // Floating cards grid: modules are glass tiles; the open one spans the full width with its settings.
+            int cols = lw > 430 ? 3 : 2;
+            float gap = 8, tw = (lw - gap * (cols - 1)) / cols, th = 62;
+            int col = 0;
             for (int i = 0; i < mods.size(); i++) {
                 Module mod = mods.get(i);
                 float in = animated() ? Anim.easeOutCubic(Anim.clamp01((now - cardIn.get(mod)) / ENTER_S)) : 1f;
                 float prev = Gfx.alpha;
                 Gfx.alpha = prev * in;
-                yy = drawRow(t, mod, lx, yy + (1 - in) * 8, lw, dt, ly, lh) - (1 - in) * 8;
+                boolean open = panel == Panel.MODULE && selected == mod;
+                if (open) {
+                    if (col > 0) { yy += th + gap; col = 0; }
+                    yy = drawRow(t, mod, lx, yy + (1 - in) * 8, lw, dt, ly, lh) - (1 - in) * 8 + gap - 4;
+                } else {
+                    drawTile(t, mod, lx + col * (tw + gap), yy + (1 - in) * 10, tw, th, i, dt, ly, lh);
+                    if (++col == cols) { col = 0; yy += th + gap; }
+                }
                 Gfx.alpha = prev;
             }
+            if (col > 0) yy += th + gap;
         }
         Gfx.unscissor();
         gridMax = Math.max(0, (yy - top) + 10 - lh);
         gridTarget = MathHelper.clamp(gridTarget, 0, gridMax);
         if (gridMax > 0) scrollbar(x + w - 7, ly + 4, lh - 8, gridScroll.value, gridMax);
+    }
+
+    /**
+     * One module as a floating glass card: category icon in a coloured bubble, name, description, key chip and switch.
+     * Hover lifts and slightly enlarges it; enabled cards carry a glowing accent-gradient rim.
+     */
+    private void drawTile(Theme t, Module mod, float x, float y, float w, float h, int idx, float dt, float clipY, float clipH) {
+        float adt = animated() ? dt : 1f;
+        boolean inClip = my >= clipY && my < clipY + clipH;
+        boolean hov = inClip && slider == null && !dragging && over(x, y, w, h);
+        mod.hover.to(hov ? 1 : 0).update(adt);
+        mod.toggleAnim.to(mod.isEnabled() ? 1 : 0).update(adt);
+        if (hov && hoverCard != mod) { hoverCard = mod; Sfx.hover(); }
+        if (!hov && hoverCard == mod) hoverCard = null;
+        float hv = Anim.easeOutCubic(mod.hover.value), on = mod.toggleAnim.value;
+        float cy = y - hv * 2.5f, cx = x + w / 2, mid = cy + h / 2;
+        Gfx.pushPlace(cx, mid, cx, mid, 1f + 0.025f * hv);
+        float r = 14;
+        if (on > 0.01f) {
+            float pulse = animated() ? 0.5f + 0.5f * MathHelper.sin(Time.seconds() * 2.2f + idx * 0.8f) : 0.6f;
+            Gfx.shadow(x, cy, w, h, r, 10 + 3 * pulse, Colors.withAlpha(Colors.lerp(t.accent(), t.accent3(), 0.4f), (int) ((0x30 + 0x24 * pulse) * on)));
+        }
+        Gfx.shadow(x, cy + 2 + hv * 2, w, h, r, 8 + hv * 6, Colors.withAlpha(0x000000, (int) (0x40 + 0x28 * hv)));
+        Gfx.glassBody(t, x, cy, w, h, r, 0.32f + 0.1f * hv);
+        if (on > 0.01f) {
+            Gfx.roundGradientH(x, cy, w, h, r, Colors.withAlpha(t.accent(), (int) (0x22 * on)), Colors.withAlpha(t.accent2(), (int) (0x08 * on)));
+            Gfx.outline(x, cy, w, h, r, 1, Colors.withAlpha(t.accent(), (int) (0xE0 * on)), Colors.withAlpha(t.accent3(), (int) (0xB0 * on)));
+        }
+        // Icon bubble.
+        float bx = x + 10, by = cy + 10, bs = 20;
+        if (on > 0.01f) Gfx.roundGradientH(bx, by, bs, bs, 7, Colors.withAlpha(t.accent(), (int) (0xE0 * on)), Colors.withAlpha(t.accent2(), (int) (0xE0 * on)));
+        if (on < 0.99f) Gfx.round(bx, by, bs, bs, 7, Colors.withAlpha(0xFFFFFF, (int) (0x1A * (1 - on))));
+        icon(mod.category, bx + bs / 2, by + bs / 2, on > 0.5f ? 0xFFFFFFFF : Colors.lerp(t.textDim(), t.text(), hv), t);
+        // Switch top-right, text below.
+        float swW = 24, swH = 13, swX = x + w - swW - 10, swY = cy + 13;
+        Gfx.toggle(t, swX, swY, swW, swH, on);
+        float tx = x + 10, maxW = w - 20;
+        Gfx.text(Gfx.ellipsize(mod.name, swX - 6 - (bx + bs + 7), Gfx.BODY + 0.5f, Font.Weight.BOLD), bx + bs + 7, by + 4.5f, Gfx.BODY + 0.5f, Font.Weight.BOLD,
+                Colors.lerp(t.textDim(), t.text(), 0.6f + 0.4f * Math.max(on, hv)));
+        String sub = listening == mod ? "Press a key…" : mod.description;
+        int subCol = listening == mod ? t.accent() : Colors.withAlpha(t.textDim(), 0xD0);
+        float kw = 0;
+        if (mod.key >= 0 && listening != mod) {
+            String k = keyName(mod.key);
+            kw = Gfx.width(k, Gfx.SMALL - 0.5f, Font.Weight.BOLD) + 10;
+            Gfx.glassBody(t, x + w - 10 - kw, cy + h - 18, kw, 12, 6, 0.35f);
+            Gfx.textCentered(k, x + w - 10 - kw / 2, cy + h - 16.2f, Gfx.SMALL - 0.5f, Font.Weight.BOLD, t.textDim());
+            kw += 6;
+        }
+        Gfx.text(Gfx.ellipsize(sub, maxW - kw, Gfx.SMALL, Font.Weight.REGULAR), tx, cy + h - 17, Gfx.SMALL, subCol);
+        Gfx.popPlace();
+        if (inClip) {
+            hits.add(new Hit(HitType.CARD, x, cy, w, h, mod, null));
+            hits.add(new Hit(HitType.SWITCH, swX - 4, swY - 4, swW + 8, swH + 8, mod, null));
+        }
     }
 
     /** One module row (status light, name, description, key, switch, chevron) and, when open, its settings under it. */
@@ -497,77 +577,72 @@ public class ClickGuiScreen extends Screen {
     }
 
     /** Small vector icons drawn from primitives (no textures). */
-    /** Small vector icons drawn from anti-aliased primitives (no textures). The selected one glows. */
+    /**
+     * Category icons: clean anti-aliased line glyphs with one or two features in the theme's accent colours, so each
+     * icon carries colour, not just a single tone. Selected icons sit on the gradient bubble in white with a
+     * third-accent highlight.
+     */
     private void icon(Category c, float cx, float cy, int col, Theme t) {
-        boolean sel = col == t.accent();
-        if (sel) Gfx.glow(cx, cy, 10, Colors.withAlpha(t.accent(), 0x48));
-        // A one-pixel contact shadow under every glyph: icons stop looking like flat stickers on the glass.
-        glyph(c, cx, cy + 1.1f, 0x66000000, t, false, true);
-        glyph(c, cx, cy, col, t, sel, false);
-    }
-
-    private void glyph(Category c, float cx, float cy, int col, Theme t, boolean sel, boolean shadow) {
-        int dim = shadow ? col : Colors.mulAlpha(col, 0.55f);
+        boolean sel = col == 0xFFFFFFFF;
+        int line = col;
+        int a1 = sel ? Colors.lerp(t.accent3(), 0xFFFFFFFF, 0.35f) : t.accent();
+        int a2 = sel ? 0xFFFFFFFF : t.accent2();
+        int a3 = sel ? Colors.lerp(t.accent3(), 0xFFFFFFFF, 0.6f) : t.accent3();
         switch (c) {
             case COMBAT -> {
-                // Sword: a blade with a real taper (two strokes meeting at the tip), a crossguard, grip and pommel.
-                Gfx.stroke(cx - 2.9f, cy + 2.9f, cx + 4.6f, cy - 4.6f, 1.9f, col);
-                Gfx.stroke(cx - 1.5f, cy + 3.5f, cx + 3.4f, cy - 1.4f, 1.1f, dim);
-                Gfx.stroke(cx - 5.1f, cy + 0.9f, cx - 0.9f, cy + 5.1f, 1.7f, col);
-                Gfx.stroke(cx - 3.4f, cy + 3.4f, cx - 5.6f, cy + 5.6f, 1.4f, col);
-                Gfx.circle(cx - 6.1f, cy + 6.1f, 1.2f, col);
+                // Two crossed blades: one in line colour, one in accent, with accent pommels.
+                Gfx.stroke(cx - 4.6f, cy + 4.6f, cx + 4.8f, cy - 4.8f, 1.7f, line);
+                Gfx.stroke(cx + 4.6f, cy + 4.6f, cx - 4.8f, cy - 4.8f, 1.7f, a1);
+                Gfx.stroke(cx - 6f, cy + 2.4f, cx - 2.4f, cy + 6f, 1.4f, line);
+                Gfx.stroke(cx + 6f, cy + 2.4f, cx + 2.4f, cy + 6f, 1.4f, a1);
+                Gfx.circle(cx - 5.6f, cy + 5.6f, 1.2f, a3);
+                Gfx.circle(cx + 5.6f, cy + 5.6f, 1.2f, a3);
             }
             case HUNTING -> {
-                // Radar: two rings, crosshair ticks, a turning sweep arm and a blip.
-                Gfx.ring(cx, cy, 5.8f, 1, col);
-                Gfx.ring(cx, cy, 3f, 1, dim);
-                Gfx.stroke(cx, cy - 7.2f, cx, cy - 6.2f, 1.1f, dim);
-                Gfx.stroke(cx, cy + 6.2f, cx, cy + 7.2f, 1.1f, dim);
-                Gfx.stroke(cx - 7.2f, cy, cx - 6.2f, cy, 1.1f, dim);
-                Gfx.stroke(cx + 6.2f, cy, cx + 7.2f, cy, 1.1f, dim);
+                Gfx.ring(cx, cy, 6f, 1, line);
+                Gfx.ring(cx, cy, 3.2f, 1, Colors.mulAlpha(line, 0.6f));
                 double a = Time.seconds() * (sel ? 2.2 : 0.0) - 0.8;
-                Gfx.stroke(cx, cy, cx + (float) Math.cos(a) * 5.2f, cy + (float) Math.sin(a) * 5.2f, 1.1f, col);
-                Gfx.circle(cx + 2.9f, cy - 2.7f, 1.4f, sel ? t.accent2() : col);
-                Gfx.circle(cx, cy, 0.9f, col);
+                Gfx.stroke(cx, cy, cx + (float) Math.cos(a) * 5.4f, cy + (float) Math.sin(a) * 5.4f, 1.2f, a1);
+                Gfx.circle(cx + 3f, cy - 2.8f, 1.6f, a2);
+                Gfx.circle(cx - 2.4f, cy + 3.2f, 1.1f, a3);
             }
             case RENDER -> {
-                // Eye: almond lids, an iris ring with a pupil and a catchlight rather than a solid disc.
-                Gfx.stroke(cx - 6.4f, cy, cx - 2.8f, cy - 3.5f, 1.4f, col);
-                Gfx.stroke(cx - 2.8f, cy - 3.5f, cx + 2.8f, cy - 3.5f, 1.4f, col);
-                Gfx.stroke(cx + 2.8f, cy - 3.5f, cx + 6.4f, cy, 1.4f, col);
-                Gfx.stroke(cx - 6.4f, cy, cx - 2.8f, cy + 3.5f, 1.4f, col);
-                Gfx.stroke(cx - 2.8f, cy + 3.5f, cx + 2.8f, cy + 3.5f, 1.4f, col);
-                Gfx.stroke(cx + 2.8f, cy + 3.5f, cx + 6.4f, cy, 1.4f, col);
-                Gfx.ring(cx, cy, 2.5f, 1, col);
-                Gfx.circle(cx, cy, 1.2f, col);
-                Gfx.circle(cx + 0.9f, cy - 0.9f, 0.55f, shadow ? col : 0xFFFFFFFF);
+                Gfx.stroke(cx - 6.4f, cy, cx - 2.6f, cy - 3.6f, 1.3f, line);
+                Gfx.stroke(cx - 2.6f, cy - 3.6f, cx + 2.6f, cy - 3.6f, 1.3f, line);
+                Gfx.stroke(cx + 2.6f, cy - 3.6f, cx + 6.4f, cy, 1.3f, line);
+                Gfx.stroke(cx - 6.4f, cy, cx - 2.6f, cy + 3.6f, 1.3f, line);
+                Gfx.stroke(cx - 2.6f, cy + 3.6f, cx + 2.6f, cy + 3.6f, 1.3f, line);
+                Gfx.stroke(cx + 2.6f, cy + 3.6f, cx + 6.4f, cy, 1.3f, line);
+                Gfx.circle(cx, cy, 2.6f, a1);
+                Gfx.circle(cx, cy, 1.1f, a2);
+                Gfx.circle(cx + 0.9f, cy - 0.9f, 0.5f, 0xFFFFFFFF);
             }
             case MISC -> {
-                // App grid: four rounded tiles, one highlighted.
-                Gfx.round(cx - 5.6f, cy - 5.6f, 4.8f, 4.8f, 1.4f, col);
-                Gfx.round(cx + 0.8f, cy - 5.6f, 4.8f, 4.8f, 1.4f, dim);
-                Gfx.round(cx - 5.6f, cy + 0.8f, 4.8f, 4.8f, 1.4f, dim);
-                Gfx.round(cx + 0.8f, cy + 0.8f, 4.8f, 4.8f, 1.4f, col);
+                Gfx.round(cx - 5.8f, cy - 5.8f, 5f, 5f, 1.6f, a1);
+                Gfx.round(cx + 0.8f, cy - 5.8f, 5f, 5f, 1.6f, line);
+                Gfx.round(cx - 5.8f, cy + 0.8f, 5f, 5f, 1.6f, line);
+                Gfx.round(cx + 0.8f, cy + 0.8f, 5f, 5f, 1.6f, a3);
             }
             case CLIENT -> {
-                // Window: rounded frame with a title bar and three dots.
-                Gfx.outline(cx - 6.2f, cy - 5f, 12.4f, 10f, 2.4f, 1, col, col);
-                Gfx.round(cx - 6.2f, cy - 5f, 12.4f, 3.2f, 1.6f, dim);
-                Gfx.circle(cx - 4f, cy - 3.4f, 0.6f, col);
-                Gfx.circle(cx - 2.3f, cy - 3.4f, 0.6f, col);
-                Gfx.round(cx - 3.8f, cy + 0.2f, 5f, 1.1f, 0.55f, col);
-                Gfx.round(cx - 3.8f, cy + 2.3f, 7.6f, 1.1f, 0.55f, dim);
+                Gfx.outline(cx - 6.4f, cy - 5f, 12.8f, 10f, 2.6f, 1, line, line);
+                Gfx.round(cx - 6.4f, cy - 5f, 12.8f, 3.2f, 1.6f, Colors.mulAlpha(line, 0.35f));
+                Gfx.circle(cx - 4.2f, cy - 3.4f, 0.7f, a1);
+                Gfx.circle(cx - 2.4f, cy - 3.4f, 0.7f, a2);
+                Gfx.circle(cx - 0.6f, cy - 3.4f, 0.7f, a3);
+                Gfx.round(cx - 4f, cy + 0.2f, 5.2f, 1.2f, 0.6f, a1);
+                Gfx.round(cx - 4f, cy + 2.4f, 8f, 1.2f, 0.6f, line);
             }
         }
     }
 
+    /** Settings gear: rounded teeth around a ring with a clean hole. */
     private static void gearIcon(float cx, float cy, int col) {
         for (int i = 0; i < 8; i++) {
             double a = i * Math.PI / 4;
-            Gfx.circle(cx + (float) Math.cos(a) * 4.6f, cy + (float) Math.sin(a) * 4.6f, 1.2f, col);
+            Gfx.stroke(cx + (float) Math.cos(a) * 3.6f, cy + (float) Math.sin(a) * 3.6f, cx + (float) Math.cos(a) * 5.6f, cy + (float) Math.sin(a) * 5.6f, 2f, col);
         }
-        Gfx.circle(cx, cy, 4f, col);
-        Gfx.circle(cx, cy, 1.7f, 0xFF15171C);
+        Gfx.circle(cx, cy, 4.2f, col);
+        Gfx.circle(cx, cy, 1.8f, 0xFF15171C);
     }
 
     private static void paletteIcon(Theme t, float cx, float cy, int col) {
@@ -612,7 +687,7 @@ public class ClickGuiScreen extends Screen {
         float kw = Math.max(44, Gfx.width(kv, Gfx.SMALL, Font.Weight.BOLD) + 16);
         boolean khov = over(px + pw - kw, yy + 4, kw, 17);
         if (listening == mod) Gfx.roundGradientH(px + pw - kw, yy + 4, kw, 17, 8.5f, Colors.withAlpha(t.accent(), 0xB0), Colors.withAlpha(t.accent2(), 0xB0));
-        else Gfx.round(px + pw - kw, yy + 4, kw, 17, 8.5f, khov ? 0x2AFFFFFF : 0x18FFFFFF);
+        else Gfx.glassBody(Themes.current(), px + pw - kw, yy + 4, kw, 17, 8.5f, khov ? 0.2f : 0.35f);
         Gfx.textCentered(kv, px + pw - kw / 2, yy + 8, Gfx.SMALL, Font.Weight.BOLD, t.text());
         if (rowVisible) hits.add(new Hit(HitType.BIND, px + pw - kw, yy + 4, kw, 17, mod, null));
         yy += ROW;
@@ -634,7 +709,7 @@ public class ClickGuiScreen extends Screen {
             float pkw = Math.max(44, Gfx.width(pv, Gfx.SMALL, Font.Weight.BOLD) + 16);
             boolean phov = over(px + pw - pkw, yy + 4, pkw, 17);
             if (listeningPlace) Gfx.roundGradientH(px + pw - pkw, yy + 4, pkw, 17, 8.5f, Colors.withAlpha(t.accent(), 0xB0), Colors.withAlpha(t.accent2(), 0xB0));
-            else Gfx.round(px + pw - pkw, yy + 4, pkw, 17, 8.5f, phov ? 0x2AFFFFFF : 0x18FFFFFF);
+            else Gfx.glassBody(Themes.current(), px + pw - pkw, yy + 4, pkw, 17, 8.5f, phov ? 0.2f : 0.35f);
             Gfx.textCentered(pv, px + pw - pkw / 2, yy + 8, Gfx.SMALL, Font.Weight.BOLD, t.text());
             if (placeVisible) hits.add(new Hit(HitType.BIND_PLACE, px + pw - pkw, yy + 4, pkw, 17, mod, null));
             yy += ROW;
@@ -756,7 +831,7 @@ public class ClickGuiScreen extends Screen {
             String v = n == ModuleManager.soundLocator.range ? ModuleManager.soundLocator.rangeText() : n.display();
             float vw = Gfx.width(v, Gfx.SMALL, Font.Weight.BOLD) + 10;
             Gfx.text(Gfx.ellipsize(n.name, w - vw - 6, Gfx.BODY, Font.Weight.REGULAR), x, y + 4, Gfx.BODY, t.text());
-            Gfx.round(x + w - vw, y + 3, vw, 13, 6.5f, 0x1CFFFFFF);
+            Gfx.glassBody(Themes.current(), x + w - vw, y + 3, vw, 13, 6.5f, 0.35f);
             Gfx.textCentered(v, x + w - vw / 2, y + 5, Gfx.SMALL, Font.Weight.BOLD, t.text());
             float ty = y + 23, th = 4;
             Gfx.round(x, ty, w, th, 2, 0x22FFFFFF);
@@ -781,7 +856,7 @@ public class ClickGuiScreen extends Screen {
             float sh = 17, sy = below ? y + 23 : y + 4;
             float sx = below ? x : x + w - controlW;
             if (segmented) {
-                Gfx.round(sx - 2, sy - 2, total + 4, sh + 4, (sh + 4) / 2, 0x30000000);
+                Gfx.glassBody(Themes.current(), sx - 2, sy - 2, total + 4, sh + 4, (sh + 4) / 2, 0.35f);
                 float ox = sx;
                 for (String o : md.modes) {
                     float ow = Gfx.width(o, Gfx.SMALL, Font.Weight.BOLD) + 12;
@@ -793,7 +868,7 @@ public class ClickGuiScreen extends Screen {
                     ox += ow;
                 }
             } else {
-                Gfx.round(sx, sy, controlW, sh, sh / 2, 0x1CFFFFFF);
+                Gfx.glassBody(Themes.current(), sx, sy, controlW, sh, sh / 2, 0.35f);
                 Gfx.textCentered(md.get(), sx + controlW / 2, sy + 4.5f, Gfx.SMALL, Font.Weight.BOLD, t.text());
                 Gfx.arrow(sx + 9, sy + sh / 2, 7, (float) Math.PI, t.textDim());
                 Gfx.arrow(sx + controlW - 9, sy + sh / 2, 7, 0, t.textDim());
@@ -866,7 +941,8 @@ public class ClickGuiScreen extends Screen {
     @Override
     public boolean mouseClicked(Click click, boolean doubled) {
         if (closing) return true;
-        float x = localX(click.x()), y = localY(click.y());
+        float[] lc = toLocal(click.x(), click.y());
+        float x = lc[0], y = lc[1];
         int button = click.button();
         // While listening, the next mouse button becomes the bind (keyboard keys are caught in keyPressed).
         if (listening != null || listeningPlace) {
@@ -944,7 +1020,8 @@ public class ClickGuiScreen extends Screen {
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double horizontal, double vertical) {
-        float x = localX(mouseX), y = localY(mouseY);
+        float[] lc = toLocal(mouseX, mouseY);
+        float x = lc[0], y = lc[1];
         Hit area = hitAt(x, y, HitType.GRID_AREA, HitType.DRAWER_AREA, HitType.DIM);
         if (area == null) return true;
         if (area.type() == HitType.GRID_AREA) gridTarget = MathHelper.clamp(gridTarget - (float) vertical * 30, 0, gridMax);

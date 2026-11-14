@@ -37,5 +37,11 @@ public final class Shaders {
     public static final RenderPipeline GLOW = base("glow").withBlend(BlendFunction.ADDITIVE).build();
 
     /** Full-screen post-processing over the world: bloom, HSL saturation/vibrance, colour grades, vignette, grain. */
+    /** Space sky on sky pixels only (depth-tested in the shader): stars, nebula, planets, a lensing black hole. */
+    public static final RenderPipeline SKYFX = base("skyfx").withSampler("Sampler0").withSampler("Sampler1").withoutBlend().build();
+
+    /** Procedural rain streaks (additive). */
+    public static final RenderPipeline RAINFX = base("rainfx").withSampler("Sampler0").withBlend(BlendFunction.TRANSLUCENT).build();
+
     public static final RenderPipeline POSTFX = base("postfx").withSampler("Sampler0").withoutBlend().build();
 }

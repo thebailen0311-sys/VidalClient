@@ -38,6 +38,17 @@ public final class WorldToScreen {
 
     public static boolean ready() { return ready; }
 
+    /** World-space view direction through a point on the scaled screen (sx, sy), from the captured camera matrices. */
+    public static org.joml.Vector3f ray(float sx, float sy, float sw, float sh) {
+        Matrix4f inv = new Matrix4f(proj).mul(view).invert();
+        float nx = sx / sw * 2f - 1f, ny = 1f - sy / sh * 2f;
+        Vector4f a = new Vector4f(nx, ny, -1f, 1f), b = new Vector4f(nx, ny, 1f, 1f);
+        inv.transform(a);
+        inv.transform(b);
+        org.joml.Vector3f d = new org.joml.Vector3f(b.x / b.w - a.x / a.w, b.y / b.w - a.y / a.w, b.z / b.w - a.z / a.w);
+        return d.normalize();
+    }
+
     public static Point project(Vec3d world) {
         MinecraftClient mc = MinecraftClient.getInstance();
         float sw = mc.getWindow().getScaledWidth(), sh = mc.getWindow().getScaledHeight();

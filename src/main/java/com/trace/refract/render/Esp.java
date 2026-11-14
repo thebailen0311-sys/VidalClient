@@ -139,6 +139,21 @@ public final class Esp {
                 topColor, bottomColor, 0, throughWalls, 5);
     }
 
+    /**
+     * The house ESP style: a fill that fades top to bottom while its hue drifts toward the theme's second accent, a
+     * soft outline and bright corner brackets.
+     */
+    public static void pretty(Box b, int color, boolean throughWalls) {
+        int low = Colors.lerp(color, com.trace.refract.theme.Themes.current().accent2(), 0.35f);
+        gradientBox(b, Colors.withAlpha(color, 0x40), Colors.withAlpha(low, 0x06), 1.1f, throughWalls, 3);
+        corners(b, Colors.withAlpha(Colors.lerp(color, 0xFFFFFFFF, 0.2f), 0xF0), 1.6f, throughWalls);
+    }
+
+    /** {@link #pretty} for a block position, inset a little. */
+    public static void prettyBlock(BlockPos pos, double inset, int color, boolean throughWalls) {
+        pretty(new Box(pos).contract(inset), color, throughWalls);
+    }
+
     /** A tracer start point just in front of the camera, so lines appear to come from the crosshair. */
     public static Vec3d tracerOrigin() {
         var cam = MinecraftClient.getInstance().gameRenderer.getCamera();

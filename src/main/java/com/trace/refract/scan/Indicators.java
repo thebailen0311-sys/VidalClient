@@ -84,7 +84,7 @@ public final class Indicators {
         if (!TABLE.isEmpty()) return;
         put(Blocks.CHEST, storage(Storage.CHEST, 1.0f, 12, true, true));
         put(Blocks.TRAPPED_CHEST, storage(Storage.TRAPPED, 2.5f, 8, true, false));
-        put(Blocks.ENDER_CHEST, storage(Storage.ENDER, 9f, 6, false, true));
+        // Ender chests are not evidence: on servers like DonutSMP nearly everyone carries and places them anywhere.
         put(Blocks.BARREL, storage(Storage.BARREL, 2f, 12, true, false));
         put(Blocks.HOPPER, storage(Storage.HOPPER, 3.5f, 10, false, false));
         put(Blocks.DISPENSER, storage(Storage.DISPENSER, 1.5f, 6, true, false));

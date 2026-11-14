@@ -73,6 +73,10 @@ public class Refract implements ClientModInitializer {
         });
 
         com.trace.refract.render.HoloRenderer.register();
+        net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents.END_MAIN.register(c -> {
+            if (com.trace.refract.module.ModuleManager.ambience != null && com.trace.refract.module.ModuleManager.ambience.isEnabled()
+                    && !com.trace.refract.module.ModuleManager.ambience.space.is("Off")) com.trace.refract.render.Glass.copyDepth();
+        });
         // The colour grade is a full-screen pass, so it has to be drawn BEFORE the vanilla HUD. Registering it in
         // the same late element as our panels painted over the hotbar, health, hunger, XP bar and action bar.
         HudElementRegistry.addFirst(Identifier.of(ID, "grade"), (ctx, tick) -> {

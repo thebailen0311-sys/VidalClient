@@ -36,6 +36,7 @@ public final class ModuleManager {
     public static Visuals.Fullbright fullbright;
     public static Ambience ambience;
     public static Cosmetics cosmetics;
+    public static CustomBars customBars;
     public static Nametags nametags;
     public static Trajectories trajectories;
     public static PlayerLog playerLog;
@@ -78,6 +79,7 @@ public final class ModuleManager {
         fullbright = add(new Visuals.Fullbright());
         ambience = add(new Ambience());
         cosmetics = add(new Cosmetics());
+        customBars = add(new CustomBars());
         nametags = add(new Nametags());
         trajectories = add(new Trajectories());
         weather = add(new Visuals.WeatherNotifier());

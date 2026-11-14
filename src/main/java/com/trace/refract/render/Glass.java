@@ -26,6 +26,75 @@ public final class Glass {
     private static TextureSetup setup;
     private static int texW, texH;
     private static long copiedFrame = -1;
+    private static GpuTexture depthTex;
+    private static GpuTextureView depthView;
+    private static int depthW, depthH;
+    private static long depthFrame = -1;
+    private static boolean depthWarned, skyLogged;
+
+    /** Copies the world depth at the end of world rendering (before the hand clears it), for the sky shader. */
+    public static void copyDepth() {
+        try {
+            var fb = MinecraftClient.getInstance().getFramebuffer();
+            if (fb.getDepthAttachment() == null) return;
+            int w = fb.textureWidth, h = fb.textureHeight;
+            GpuDevice dev = RenderSystem.getDevice();
+            if (depthTex == null || w != depthW || h != depthH) {
+                if (depthView != null) depthView.close();
+                if (depthTex != null) depthTex.close();
+                depthTex = dev.createTexture("refract-depth", GpuTexture.USAGE_COPY_DST | GpuTexture.USAGE_TEXTURE_BINDING | GpuTexture.USAGE_RENDER_ATTACHMENT, TextureFormat.DEPTH32, w, h, 1, 1);
+                depthView = dev.createTextureView(depthTex);
+                depthW = w;
+                depthH = h;
+            }
+            dev.createCommandEncoder().copyTextureToTexture(fb.getDepthAttachment(), depthTex, 0, 0, 0, 0, 0, w, h);
+            depthFrame = Time.frameId();
+        } catch (Throwable t) {
+            depthFrame = -1;
+            if (!depthWarned) { depthWarned = true; com.trace.refract.Refract.LOG.warn("Space sky: depth copy failed", t); }
+        }
+    }
+
+    /**
+     * Space sky over the sky pixels (skyfx.fsh). A grid of quads covers the screen; each vertex carries the real world
+     * view direction through it, so planets and the black hole sit at fixed places in the sky as you look around.
+     */
+    static void sky(net.minecraft.client.gui.DrawContext ctx, float s, float sw, float sh, int scene) {
+        if (scene <= 0 || depthFrame != Time.frameId() || !ensure() || !com.trace.refract.util.WorldToScreen.ready()) {
+            if (!skyLogged && scene > 0) { skyLogged = true; com.trace.refract.Refract.LOG.info("Space sky skipped: depthFrame={} frame={} ready={}", depthFrame, Time.frameId(), com.trace.refract.util.WorldToScreen.ready()); }
+            return;
+        }
+        Matrix3x2f pose = new Matrix3x2f(ctx.getMatrices());
+        int gx = 32, gy = 18;
+        float[] v = new float[(gx + 1) * (gy + 1) * 3];
+        for (int j = 0; j <= gy; j++) for (int i = 0; i <= gx; i++) {
+            var d = com.trace.refract.util.WorldToScreen.ray(sw * i / gx, sh * j / gy, sw, sh);
+            int k = (j * (gx + 1) + i) * 3;
+            v[k] = d.x; v[k + 1] = d.y; v[k + 2] = d.z;
+        }
+        int t = Math.floorMod((int) (Time.seconds() * 20), 65536);
+        var samplers = TextureSetup.of(view, RenderSystem.getSamplerCache().get(FilterMode.LINEAR), depthView, RenderSystem.getSamplerCache().get(FilterMode.NEAREST));
+        ScreenRect bounds = new ScreenRect(0, 0, (int) Math.ceil(sw * s) + 1, (int) Math.ceil(sh * s) + 1).transformEachVertex(pose);
+        ((com.trace.refract.mixin.DrawContextAccessor) ctx).refract$state().addSimpleElement(new Sky(samplers, pose, v, gx, gy, sw * s, sh * s, t >> 8, t & 255, scene * 32, bounds));
+    }
+
+    private record Sky(TextureSetup textureSetup, Matrix3x2f pose, float[] v, int gx, int gy, float w, float h, int tr, int tg, int a, ScreenRect bounds)
+            implements SimpleGuiElementRenderState {
+        @Override public RenderPipeline pipeline() { return Shaders.SKYFX; }
+
+        @Override public ScreenRect scissorArea() { return null; }
+
+        private void vert(VertexConsumer vc, int i, int j) {
+            int k = (j * (gx + 1) + i) * 3;
+            vc.vertex(pose, w * i / gx, h * j / gy).texture(v[k], v[k + 1]).color(tr, tg, v[k + 2] >= 0 ? 255 : 0, a);
+        }
+
+        @Override public void setupVertices(VertexConsumer vc) {
+            for (int j = 0; j < gy; j++) for (int i = 0; i < gx; i++) {
+                vert(vc, i, j); vert(vc, i, j + 1); vert(vc, i + 1, j + 1); vert(vc, i + 1, j);
+            }
+        }
+    }
 
     private Glass() {}
 
@@ -109,6 +178,29 @@ public final class Glass {
             vc.vertex(pose, 0, h).texture(u, v).color(c);
             vc.vertex(pose, w, h).texture(u, v).color(c);
             vc.vertex(pose, w, 0).texture(u, v).color(c);
+        }
+    }
+
+    /** Full-screen rain (rainfx.fsh); {@code k} intensity 0..1, {@code lean} 0..1 (0.5 level). */
+    static void rain(net.minecraft.client.gui.DrawContext ctx, float w, float h, float k, float lean) {
+        if (!ensure()) return;
+        Matrix3x2f pose = new Matrix3x2f(ctx.getMatrices());
+        int c = (Math.round(Math.max(0, Math.min(1, lean)) * 255) << 16) | 0xFF000000;
+        ScreenRect bounds = new ScreenRect(0, 0, (int) Math.ceil(w) + 1, (int) Math.ceil(h) + 1).transformEachVertex(pose);
+        float t = Time.seconds() % 600f;
+        ((com.trace.refract.mixin.DrawContextAccessor) ctx).refract$state().addSimpleElement(new Rain(setup, pose, w, h, t, k, c, bounds));
+    }
+
+    private record Rain(TextureSetup textureSetup, Matrix3x2f pose, float w, float h, float t, float k, int c, ScreenRect bounds) implements SimpleGuiElementRenderState {
+        @Override public RenderPipeline pipeline() { return Shaders.RAINFX; }
+
+        @Override public ScreenRect scissorArea() { return null; }
+
+        @Override public void setupVertices(VertexConsumer vc) {
+            vc.vertex(pose, 0, 0).texture(t, k).color(c);
+            vc.vertex(pose, 0, h).texture(t, k).color(c);
+            vc.vertex(pose, w, h).texture(t, k).color(c);
+            vc.vertex(pose, w, 0).texture(t, k).color(c);
         }
     }
 

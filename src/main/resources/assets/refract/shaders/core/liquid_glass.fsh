@@ -56,16 +56,19 @@ void main() {
 
     vec3 col;
     if (frosted) {
-        // Frosted: a 16-tap disk blur around the (gently) refracted point.
+        // Frosted glass: light scatters through an etched surface. A wide disk of samples, rotated per pixel by a
+        // hash so the blur dissolves into fine frost instead of banding, then a milky lift.
         col = vec3(0.0);
         float ga = 2.39996;
-        for (int i = 0; i < 16; i++) {
+        float jit = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) * 6.2832;
+        for (int i = 0; i < 24; i++) {
             float fi = float(i) + 0.5;
-            float rr = sqrt(fi / 16.0) * 7.0;
-            vec2 o = vec2(cos(fi * ga), sin(fi * ga)) * rr / tex;
+            float rr = sqrt(fi / 24.0) * 11.0;
+            vec2 o = vec2(cos(fi * ga + jit), sin(fi * ga + jit)) * rr / tex;
             col += texture(Sampler0, uv + offUV + o).rgb;
         }
-        col /= 16.0;
+        col /= 24.0;
+        col = mix(col, vec3(1.0), 0.07) + (fract(sin(dot(gl_FragCoord.xy, vec2(39.3468, 11.135))) * 24634.6345) - 0.5) * 0.02;
     } else {
         // Chromatic dispersion: red bends a little more than green, blue a little less.
         float disp = 0.03 + 0.14 * lens;

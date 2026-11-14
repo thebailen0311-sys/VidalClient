@@ -138,7 +138,7 @@ public class GrowthEsp extends Module {
             if (i++ < 110) {
                 Esp.gradientBox(it.box, Colors.withAlpha(it.color, 0x3C), Colors.withAlpha(it.color, 0x04), 1.25f, walls, 3);
             } else {
-                Esp.box(it.box, Colors.withAlpha(it.color, 0x26), Colors.withAlpha(it.color, 0xD0), 1.25f, walls);
+                Esp.pretty(it.box, it.color, walls);
             }
             if (origin != null) Esp.line(origin, it.center, Colors.withAlpha(it.color, 0x80), 1f, true);
         }

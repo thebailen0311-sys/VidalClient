@@ -1,0 +1,49 @@
+##### hud #####
+[07:28:22] [Render thread/INFO] (Vanta) [livetest] RESULT spec=hud finished, modules exercised=2 health=20.0 onGround=true
+RefractTest failed Timer (x4) 
+RefractTest failed TimerLimit (x1) 
+RefractTest failed Timer (x1) 
+RefractTest failed Timer (x2) 
+RefractTest failed Timer (x3) 
+RefractTest failed TimerLimit (x1) 
+##### tbot #####
+[07:29:21] [Render thread/INFO] (Vanta) [livetest] RESULT spec=tbot finished, modules exercised=2 health=20.0 onGround=true
+RefractTest failed TimerLimit (x1) 
+RefractTest failed Timer (x1) 
+RefractTest failed TimerLimit (x1) 
+RefractTest failed Timer (x2) 
+RefractTest failed Timer (x3) 
+RefractTest failed Timer (x4) 
+##### crystal #####
+[07:30:15] [Render thread/INFO] (Vanta) [livetest] RESULT spec=crystal finished, modules exercised=1 health=20.0 onGround=true
+RefractTest failed TimerLimit (x1) 
+RefractTest failed Timer (x1) 
+RefractTest failed TimerLimit (x1) 
+RefractTest failed Timer (x2) 
+RefractTest failed Timer (x3) 
+RefractTest failed Timer (x4) 
+##### anchor #####
+[07:31:09] [Render thread/INFO] (Vanta) [livetest] RESULT spec=anchor finished, modules exercised=1 health=20.0 onGround=true
+RefractTest failed Timer (x3) 
+RefractTest failed Timer (x4) 
+RefractTest failed Timer (x1) 
+RefractTest failed Timer (x2) 
+RefractTest failed Timer (x3) 
+RefractTest failed Timer (x4) 
+##### totem #####
+[07:32:08] [Render thread/INFO] (Vanta) [livetest] RESULT spec=totem finished, modules exercised=1 health=20.0 onGround=true
+RefractTest failed Timer (x4) 
+RefractTest failed Timer (x1) 
+RefractTest failed TimerLimit (x1) 
+RefractTest failed Timer (x2) 
+RefractTest failed Timer (x3) 
+RefractTest failed Timer (x4) 
+##### stap #####
+[07:33:07] [Render thread/INFO] (Vanta) [livetest] RESULT spec=stap finished, modules exercised=1 health=20.0 onGround=true
+RefractTest failed Timer (x4) 
+RefractTest failed Timer (x1) 
+RefractTest failed TimerLimit (x1) 
+RefractTest failed Timer (x2) 
+RefractTest failed Timer (x3) 
+RefractTest failed Timer (x4) 
+SWEEP DONE

@@ -11,6 +11,7 @@ import com.trace.refract.theme.Themes;
 public class ClickGui extends Module {
     public final ModeSetting theme = add(new ModeSetting("Theme", "Violet", Themes.names()).onChange(Themes::set));
     public final ModeSetting glass = add(new ModeSetting("Glass Style", "Liquid Glass", "Liquid Glass", "Frosted"));
+    public final BoolSetting tilt = add(new BoolSetting("3D Tilt", true));
     public final BoolSetting blur = add(new BoolSetting("Frosted Blur", true));
     public final BoolSetting dim = add(new BoolSetting("Dim Background", true));
     public final BoolSetting animations = add(new BoolSetting("Animations", true));

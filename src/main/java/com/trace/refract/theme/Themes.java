@@ -38,6 +38,22 @@ public final class Themes {
     /** How long a theme change takes to cross-fade, in milliseconds. */
     public static final long FADE_MS = 250;
 
+    /** Third accent per theme, so palettes carry three colours, not two. */
+    static final java.util.Map<String, Integer> THIRD = java.util.Map.ofEntries(
+            java.util.Map.entry("Ocean", 0xFF4DE3FF), java.util.Map.entry("Rose", 0xFFFFB86B), java.util.Map.entry("Mint", 0xFFB6FF6A),
+            java.util.Map.entry("Amber", 0xFFFF4D6D), java.util.Map.entry("Violet", 0xFFFF6FD8), java.util.Map.entry("Graphite", 0xFF8FA6C8),
+            java.util.Map.entry("Aurora", 0xFF4DA3FF), java.util.Map.entry("Cyber", 0xFFFFE066), java.util.Map.entry("Sakura", 0xFFB59CFF),
+            java.util.Map.entry("Sunset", 0xFFFFD25A), java.util.Map.entry("Glacier", 0xFFE0C3FF), java.util.Map.entry("Crimson", 0xFFFF9A3D));
+
+    static int third(Theme t) {
+        Integer c = THIRD.get(t.name());
+        if (c == null) return com.trace.refract.util.Colors.lerp(t.accent(), t.accent2(), 0.5f);
+        // While cross-fading, ease the third colour along with the accents.
+        Theme target = Themes.target();
+        Integer tc = THIRD.get(target.name());
+        return tc == null || target == t ? c : com.trace.refract.util.Colors.lerp(c, tc, 0.5f);
+    }
+
     private static Theme from = ALL.get(0), to = ALL.get(0);
     private static long fadeStart = 0;
     private static Theme cached = ALL.get(0);

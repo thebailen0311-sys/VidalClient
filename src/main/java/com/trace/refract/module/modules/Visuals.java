@@ -111,7 +111,7 @@ public final class Visuals {
             for (Entity e : found) {
                 int col = e instanceof ItemEntity ? 0xFFFFD84D : 0xFF7CFF9A;
                 var b = Esp.box(e).expand(0.08);
-                Esp.box(b, Colors.withAlpha(col, 0x30), Colors.withAlpha(col, 0xE0), 1.5f, true);
+                Esp.pretty(b, col, true);
             }
         }
 

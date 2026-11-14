@@ -1,5 +1,5 @@
 {
-  "version": "1.0.3",
-  "notes": "Aim yaw is now kept inside -180..180 (fixes Grim AimModulo360 from Auto Crystal and rotation easing), combat actions are sent before the movement packet, mouse binds show on module cards, and Ambience no longer crashes. Adds -Drefract.netlog diagnostics.",
-  "jar": "dist/vanta-1.0.3.jar"
+  "version": "1.0.4",
+  "notes": "New Custom Bars module: frosted hotbar with health, food and XP bars. Aim yaw normalisation, combat packets sent before movement, mouse binds visible, Ambience crash fixed.",
+  "jar": "dist/vanta-1.0.4.jar"
 }

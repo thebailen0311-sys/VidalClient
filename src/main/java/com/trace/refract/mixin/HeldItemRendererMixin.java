@@ -31,6 +31,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(HeldItemRenderer.class)
 public abstract class HeldItemRendererMixin {
     @Unique private final ItemRenderState refract$state = new ItemRenderState();
+    @Unique private boolean refract$pushed;
 
     @Shadow
     private void renderArmHoldingItem(MatrixStack matrices, OrderedRenderCommandQueue queue, int light, float equipProgress, float swingProgress, Arm arm) {}
@@ -60,8 +61,33 @@ public abstract class HeldItemRendererMixin {
     private void refract$knifeHand(AbstractClientPlayerEntity player, float tickDelta, float pitch, Hand hand, float swingProgress, ItemStack item,
                                    float equipProgress, MatrixStack matrices, OrderedRenderCommandQueue queue, int light, CallbackInfo ci) {
         var c = ModuleManager.cosmetics;
-        if (c == null || !c.knifeOn() || hand != Hand.MAIN_HAND || player.isInvisible()) return;
-        if (!Registries.ITEM.getId(item.getItem()).getPath().endsWith("_sword")) return;
+        refract$pushed = false;
+        boolean knife = c != null && c.knifeOn() && hand == Hand.MAIN_HAND && !player.isInvisible() && Registries.ITEM.getId(item.getItem()).getPath().endsWith("_sword");
+        if (!knife) {
+            // Hand animations for every other item (and the empty hand): applied on top of vanilla, undone at RETURN.
+            if (c != null && c.isEnabled() && !c.handAnim.is("Off")) {
+                matrices.push();
+                refract$pushed = true;
+                float f = (hand == Hand.MAIN_HAND ? player.getMainArm() : player.getMainArm().getOpposite()) != Arm.LEFT ? 1f : -1f;
+                float t = com.trace.refract.util.Time.seconds();
+                float sw = MathHelper.sin(swingProgress * (float) Math.PI);
+                // Idle breathing sway for all modes.
+                matrices.translate(f * 0.006f * MathHelper.sin(t * 1.3f), 0.008f * MathHelper.sin(t * 2.1f), 0);
+                switch (c.handAnim.get()) {
+                    case "Spin" -> {
+                        matrices.translate(f * 0.56f, -0.52f, -0.72f);
+                        matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(f * -360f * com.trace.refract.util.Anim.easeInOutCubic(swingProgress)));
+                        matrices.translate(f * -0.56f, 0.52f, 0.72f);
+                    }
+                    case "Punch" -> matrices.translate(f * -0.04f * sw, 0.05f * sw, -0.22f * sw);
+                    default -> { // Smooth: a softer arc and a little settle
+                        matrices.translate(f * 0.02f * sw, -0.03f * sw, -0.05f * sw);
+                        matrices.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(f * 6f * sw));
+                    }
+                }
+            }
+            return;
+        }
         Arm arm = player.getMainArm();
         float f = arm != Arm.LEFT ? 1f : -1f;
         KnifeRenderer.armRenders++;
@@ -86,5 +112,11 @@ public abstract class HeldItemRendererMixin {
         }
         matrices.pop();
         ci.cancel();
+    }
+
+    @Inject(method = "renderFirstPersonItem", at = @At("RETURN"))
+    private void refract$handAnimEnd(AbstractClientPlayerEntity player, float tickDelta, float pitch, Hand hand, float swingProgress, ItemStack item,
+                                     float equipProgress, MatrixStack matrices, OrderedRenderCommandQueue queue, int light, CallbackInfo ci) {
+        if (refract$pushed) { matrices.pop(); refract$pushed = false; }
     }
 }

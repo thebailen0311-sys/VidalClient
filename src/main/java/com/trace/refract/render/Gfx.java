@@ -426,10 +426,11 @@ public final class Gfx {
             float in = 1.25f / s;
             outline(x - in, y - in, w + 2 * in, h + 2 * in, r + in, 1, 0x14000000, 0x2A000000);
         } else {
-            int a = (int) (0x50 + 0x80 * density);
+            // Frosted glass is light and milky, not a dark acrylic slab: a pale wash, a little theme tint for text.
+            int a = (int) (0x10 + 0x90 * density * density);
+            roundGradient(x, y, w, h, r, 0x16FFFFFF, 0x08FFFFFF);
             roundGradient(x, y, w, h, r, Colors.withAlpha(t.glassTop(), a), Colors.withAlpha(t.glassBottom(), Math.min(255, a + 6)));
-            grain(x, y, w, h, r, 0x0AFFFFFF);
-            outline(x, y, w, h, r, 1, 0x30FFFFFF, 0x0CFFFFFF);
+            outline(x, y, w, h, r, 1, 0x50FFFFFF, 0x14FFFFFF);
         }
     }
 
@@ -453,6 +454,12 @@ public final class Gfx {
         if (dc == null) return;
         Glass.post(dc, w * s, h * s, bloom, saturation, vignette, grade, preset, hue);
     }
+
+    /** Space sky over the sky pixels (skyfx.fsh); scene 1 planets, 2 black hole, 3 nebula, 4 galaxy. Sizes in GUI units. */
+    public static void sky(float w, float h, int scene) { Glass.sky(ctx, s, w, h, scene); }
+
+    /** Full-screen shader rain (rainfx.fsh); sizes in GUI units. */
+    public static void rain(float w, float h, float k, float lean) { Glass.rain(ctx, w * s, h * s, k, lean); }
 
     /** One soft additive light (glow.fsh). */
     public static void light(float cx, float cy, float radius, int color) {
@@ -504,7 +511,7 @@ public final class Gfx {
         glow(cx, cy, size * 0.95f, Colors.withAlpha(t.accent(), 0x55));
         diamond(cx, cy, r, t.accent(), t.accent2());
         diamond(cx, cy + r * 0.28f, r * 0.62f, Colors.withAlpha(Colors.shade(t.accent2(), -0.35f), 0xE0), Colors.withAlpha(Colors.shade(t.accent(), -0.45f), 0xE0));
-        diamond(cx, cy - r * 0.36f, r * 0.36f, 0xF0FFFFFF, Colors.withAlpha(t.accent(), 0xC0));
+        diamond(cx, cy - r * 0.36f, r * 0.36f, 0xF0FFFFFF, Colors.withAlpha(t.accent3(), 0xD0));
         circle(cx - r * 0.18f, cy - r * 0.42f, Math.max(0.6f, r * 0.08f), 0xFFFFFFFF);
     }
 
@@ -573,7 +580,7 @@ public final class Gfx {
     /** Switch with an accent-to-second-accent gradient track and a soft glow when on. {@code on} is the eased 0..1 state. */
     public static void toggle(Theme t, float x, float y, float w, float h, float on) {
         on = com.trace.refract.util.Anim.clamp01(on);
-        if (on > 0.01f) shadow(x, y, w, h, h / 2, 4, Colors.withAlpha(t.accent(), (int) (0x50 * on)));
+        if (on > 0.01f) shadow(x, y, w, h, h / 2, 4, Colors.withAlpha(Colors.lerp(t.accent(), t.accent3(), 0.5f), (int) (0x55 * on)));
         round(x, y, w, h, h / 2, 0x2EFFFFFF);
         if (on > 0.01f) {
             float prev = alpha;

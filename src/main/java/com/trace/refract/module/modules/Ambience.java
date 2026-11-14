@@ -31,20 +31,26 @@ import java.util.Random;
  * </ul>
  */
 public class Ambience extends Module {
-    public final ModeSetting sky = add(new ModeSetting("Sky", "Aurora Night", "Off", "Theme", "Aurora Night", "Sunset", "Void"));
-    public final NumberSetting strength = add(new NumberSetting("Sky Strength", 0.7, 0.1, 1.0, 0.05, ""));
-    public final BoolSetting fog = add(new BoolSetting("Tint Fog", true));
-    public final BoolSetting aurora = add(new BoolSetting("Aurora", true));
-    public final NumberSetting auroraGlow = add(new NumberSetting("Aurora Intensity", 0.7, 0.1, 1.0, 0.05, ""));
-    public final BoolSetting shootingStars = add(new BoolSetting("Shooting Stars", true));
-    public final BoolSetting particles = add(new BoolSetting("Glow Motes", true));
-    public final NumberSetting density = add(new NumberSetting("Mote Density", 3, 1, 10, 1, ""));
-    public final BoolSetting fireflies = add(new BoolSetting("Fireflies", true));
-    public final ModeSetting grade = add(new ModeSetting("Colour Grade", "Dream", "Off", "Cinematic", "Dream", "Noir", "Neon"));
-    public final NumberSetting gradeStrength = add(new NumberSetting("Grade Strength", 0.6, 0.05, 1.0, 0.05, ""));
-    public final NumberSetting bloom = add(new NumberSetting("Bloom", 0.45, 0.0, 1.0, 0.05, ""));
-    public final NumberSetting saturation = add(new NumberSetting("Saturation", 1.2, 0.0, 2.0, 0.05, "x"));
-    public final NumberSetting vignetteAmt = add(new NumberSetting("Vignette", 0.45, 0.0, 1.0, 0.05, ""));
+    /** The only setting: a full look, tuned as a whole. "The End" is applied automatically in the End. */
+    public final ModeSetting preset = add(new ModeSetting("Preset", "Aurora Night", "Off", "Aurora Night", "Deep Space", "Black Hole", "Rainy Night", "Sunset Dream", "Noir"));
+    public final BoolSetting rain = new BoolSetting("Rain", false);
+    private String applied = "";
+
+    public final ModeSetting sky = new ModeSetting("Sky", "Aurora Night", "Off", "Theme", "Aurora Night", "Sunset", "Void");
+    public final ModeSetting space = new ModeSetting("Space Sky", "Galaxy", "Off", "Planets", "Black Hole", "Nebula", "Galaxy", "End");
+    public final NumberSetting strength = new NumberSetting("Sky Strength", 0.7, 0.1, 1.0, 0.05, "");
+    public final BoolSetting fog = new BoolSetting("Tint Fog", true);
+    public final BoolSetting aurora = new BoolSetting("Aurora", true);
+    public final NumberSetting auroraGlow = new NumberSetting("Aurora Intensity", 0.7, 0.1, 1.0, 0.05, "");
+    public final BoolSetting shootingStars = new BoolSetting("Shooting Stars", true);
+    public final BoolSetting particles = new BoolSetting("Glow Motes", true);
+    public final NumberSetting density = new NumberSetting("Mote Density", 3, 1, 10, 1, "");
+    public final BoolSetting fireflies = new BoolSetting("Fireflies", true);
+    public final ModeSetting grade = new ModeSetting("Colour Grade", "Dream", "Off", "Cinematic", "Dream", "Noir", "Neon");
+    public final NumberSetting gradeStrength = new NumberSetting("Grade Strength", 0.6, 0.05, 1.0, 0.05, "");
+    public final NumberSetting bloom = new NumberSetting("Bloom", 0.45, 0.0, 1.0, 0.05, "");
+    public final NumberSetting saturation = new NumberSetting("Saturation", 1.2, 0.0, 2.0, 0.05, "x");
+    public final NumberSetting vignetteAmt = new NumberSetting("Vignette", 0.45, 0.0, 1.0, 0.05, "");
     private final Random rng = new Random();
     private final List<float[]> stars = new ArrayList<>(); // dirX, dirY, dirZ, speedX, speedY, speedZ, start
 
@@ -54,10 +60,64 @@ public class Ambience extends Module {
     }
 
     /** Refract's own mote particles advance every tick, whichever module spawned them. */
-    @Override public void onAlwaysTick() { Motes.tick(); }
+    @Override public void onAlwaysTick() {
+        Motes.tick();
+        boolean end = mc.world != null && mc.world.getRegistryKey() == net.minecraft.world.World.END;
+        String want = preset.is("Off") ? "Off" : end ? "The End" : preset.get();
+        if (!want.equals(applied)) { applied = want; apply(want); }
+    }
+
+    /** Sets every internal look parameter for a preset. */
+    private void apply(String p) {
+        // defaults
+        sky.set("Off"); space.set("Off"); strength.set(0.7); fog.set(true); aurora.set(false); auroraGlow.set(0.7); shootingStars.set(false);
+        particles.set(true); density.set(3.0); fireflies.set(false); rain.set(false); grade.set("Off"); gradeStrength.set(0.5); bloom.set(0.35); saturation.set(1.1); vignetteAmt.set(0.4);
+        switch (p) {
+            case "Aurora Night" -> { sky.set("Aurora Night"); space.set("Nebula"); aurora.set(true); shootingStars.set(true); fireflies.set(true); grade.set("Dream"); bloom.set(0.45); saturation.set(1.2); }
+            case "Deep Space" -> { sky.set("Void"); space.set("Galaxy"); strength.set(0.95); shootingStars.set(true); density.set(2.0); grade.set("Dream"); gradeStrength.set(0.35); bloom.set(0.55); saturation.set(1.25); vignetteAmt.set(0.5); }
+            case "Black Hole" -> { sky.set("Void"); space.set("Black Hole"); strength.set(0.95); grade.set("Cinematic"); gradeStrength.set(0.45); bloom.set(0.65); vignetteAmt.set(0.55); }
+            case "Rainy Night" -> { sky.set("Theme"); strength.set(0.6); rain.set(true); particles.set(false); grade.set("Cinematic"); gradeStrength.set(0.55); bloom.set(0.35); saturation.set(0.9); vignetteAmt.set(0.55); }
+            case "Sunset Dream" -> { sky.set("Sunset"); fireflies.set(true); grade.set("Dream"); gradeStrength.set(0.6); bloom.set(0.5); saturation.set(1.3); }
+            case "Noir" -> { particles.set(false); grade.set("Noir"); gradeStrength.set(1.0); bloom.set(0.25); vignetteAmt.set(0.65); }
+            case "The End" -> { sky.set("Void"); space.set("End"); strength.set(0.9); shootingStars.set(true); density.set(4.0); grade.set("Dream"); gradeStrength.set(0.45); bloom.set(0.6); saturation.set(1.3); vignetteAmt.set(0.5); }
+            default -> { particles.set(false); bloom.set(0.0); saturation.set(1.0); vignetteAmt.set(0.0); }
+        }
+    }
+
+    /** Puddle ripples: {x, y, z, start time}. */
+    private final List<float[]> ripples = new ArrayList<>();
+    /** Puddles near you: {x, y, z, radius}; chosen from the block position, so they stay put. */
+    private final List<float[]> puddles = new ArrayList<>();
+    private int puddleTick;
 
     @Override public void onTick() {
         if (mc.world == null || mc.player == null) return;
+        if (rain.on() && ++puddleTick % 20 == 1) {
+            puddles.clear();
+            int px = mc.player.getBlockX(), pz = mc.player.getBlockZ();
+            for (int x = px - 16; x <= px + 16; x++) for (int z = pz - 16; z <= pz + 16; z++) {
+                long h = (x * 73856093L) ^ (z * 19349663L);
+                float f = ((h ^ (h >>> 13)) & 1023) / 1023f;
+                if (f > 0.1f) continue;
+                int top = mc.world.getTopY(net.minecraft.world.Heightmap.Type.MOTION_BLOCKING, x, z);
+                var below = mc.world.getBlockState(new BlockPos(x, top - 1, z));
+                if (Math.abs(top - mc.player.getY()) > 10 || !below.isOpaqueFullCube() || !below.getFluidState().isEmpty()) continue;
+                puddles.add(new float[]{x + 0.5f, top + 0.015f, z + 0.5f, 0.55f + f * 6f});
+            }
+        }
+        if (!rain.on()) puddles.clear();
+        if (rain.on()) {
+            for (int i = 0; i < 6; i++) {
+                double x = mc.player.getX() + (rng.nextDouble() - 0.5) * 20, z = mc.player.getZ() + (rng.nextDouble() - 0.5) * 20;
+                int top = mc.world.getTopY(net.minecraft.world.Heightmap.Type.MOTION_BLOCKING, (int) Math.floor(x), (int) Math.floor(z));
+                if (Math.abs(top - mc.player.getY()) > 12) continue;
+                if (!puddles.isEmpty() && rng.nextInt(3) > 0) { float[] pd = puddles.get(rng.nextInt(puddles.size())); x = pd[0] + (rng.nextDouble() - 0.5) * pd[3]; z = pd[2] + (rng.nextDouble() - 0.5) * pd[3]; top = (int) Math.floor(pd[1]); }
+                ripples.add(new float[]{(float) x, top + 0.02f, (float) z, Time.seconds()});
+                if (rng.nextInt(3) == 0) Motes.spawn(x, top + 0.05, z, (rng.nextDouble() - 0.5) * 0.04, 0.06, (rng.nextDouble() - 0.5) * 0.04, 6, 0.025f, 0xFFCFE3FF, 0xFF8FB6FF);
+            }
+            ripples.removeIf(rp -> Time.seconds() - rp[3] > 0.9f);
+            if (ripples.size() > 160) ripples.subList(0, ripples.size() - 160).clear();
+        } else ripples.clear();
         Theme t = Themes.current();
         if (particles.on()) {
             for (int i = 0; i < density.asInt(); i++) {
@@ -123,6 +183,34 @@ public class Ambience extends Module {
                 }
             }
         }
+        // Puddles: glossy patches reflecting cool sky light, brightest in the middle, soft at the edge.
+        int skyRefl = Colors.lerp(0xFF7F9CC8, Themes.current().accent2(), 0.3f);
+        Vec3d camP = mc.gameRenderer.getCamera().getCameraPos();
+        for (float[] pd : puddles) {
+            float cx = (float) (pd[0] - camP.x), cy = (float) (pd[1] - camP.y), cz = (float) (pd[2] - camP.z), r = pd[3];
+            float shimmer = 0.75f + 0.25f * (float) Math.sin(time * 1.3 + pd[0] * 0.7 + pd[2]);
+            int mid = Colors.withAlpha(skyRefl, (int) (70 * shimmer)), edge = Colors.withAlpha(skyRefl, 0);
+            for (int k = 0; k < 18; k++) {
+                double a0 = k * Math.PI * 2 / 18, a1 = (k + 1) * Math.PI * 2 / 18;
+                float w0 = r * (0.8f + 0.2f * (float) Math.sin(a0 * 3 + pd[0])), w1 = r * (0.8f + 0.2f * (float) Math.sin(a1 * 3 + pd[0]));
+                quad2(vc, e, cx, cy, cz, mid, cx + (float) Math.cos(a0) * w0, cy, cz + (float) Math.sin(a0) * w0, edge,
+                        cx + (float) Math.cos(a1) * w1, cy, cz + (float) Math.sin(a1) * w1, edge, cx, cy, cz, mid);
+            }
+        }
+        // Puddle ripples: thin rings of light spreading on the ground where drops land.
+        Vec3d camR = mc.gameRenderer.getCamera().getCameraPos();
+        for (float[] rp : ripples) {
+            float age = (time - rp[3]) / 0.9f;
+            if (age < 0 || age > 1) continue;
+            float r0 = 0.05f + age * 0.55f, r1 = r0 + 0.035f;
+            int ca = Colors.withAlpha(0xFFCFE3FF, (int) (150 * (1 - age)));
+            float cx = (float) (rp[0] - camR.x), cy = (float) (rp[1] - camR.y), cz = (float) (rp[2] - camR.z);
+            for (int k = 0; k < 20; k++) {
+                double a0 = k * Math.PI * 2 / 20, a1 = (k + 1) * Math.PI * 2 / 20;
+                float c0 = (float) Math.cos(a0), s0 = (float) Math.sin(a0), c1 = (float) Math.cos(a1), s1 = (float) Math.sin(a1);
+                quad2(vc, e, cx + c0 * r0, cy, cz + s0 * r0, ca, cx + c0 * r1, cy, cz + s0 * r1, 0, cx + c1 * r1, cy, cz + s1 * r1, 0, cx + c1 * r0, cy, cz + s1 * r0, ca);
+            }
+        }
         Vec3d look = Vec3d.ZERO;
         for (float[] st : stars) {
             float age = time - st[6], f = age / 1.2f;
@@ -156,7 +244,16 @@ public class Ambience extends Module {
         int preset = switch (grade.get()) { case "Cinematic" -> 1; case "Dream" -> 2; case "Noir" -> 3; case "Neon" -> 4; default -> 0; };
         int acc = Themes.current().accent();
         float[] hsb = java.awt.Color.RGBtoHSB(Colors.r(acc), Colors.g(acc), Colors.b(acc), null);
-        Gfx.post(ctx, sw, sh, bloom.asFloat(), saturation.asFloat(), vignetteAmt.asFloat(), preset == 0 ? 0 : gradeStrength.asFloat(), preset, hsb[0]);
+        Gfx.begin(ctx); // runs in its own early HUD element, so it opens its own draw bracket
+        try {
+            // Post first (it repaints the whole screen from the world copy), then the sky on its own layer above it.
+            Gfx.post(sw, sh, bloom.asFloat(), saturation.asFloat(), vignetteAmt.asFloat(), preset == 0 ? 0 : gradeStrength.asFloat(), preset, hsb[0]);
+            Gfx.newLayer();
+            drawSpace(sw, sh);
+            drawRain(sw, sh);
+        } finally {
+            Gfx.end();
+        }
     }
 
     /** Kept for callers that already run inside a GUI frame, where the shared context is valid. */
@@ -165,6 +262,20 @@ public class Ambience extends Module {
                 grade.is("Off") ? 0 : gradeStrength.asFloat(),
                 switch (grade.get()) { case "Cinematic" -> 1; case "Dream" -> 2; case "Noir" -> 3; case "Neon" -> 4; default -> 0; },
                 java.awt.Color.RGBtoHSB(Colors.r(Themes.current().accent()), Colors.g(Themes.current().accent()), Colors.b(Themes.current().accent()), null)[0]);
+        Gfx.newLayer();
+        drawSpace(sw, sh);
+        drawRain(sw, sh);
+    }
+
+    private void drawRain(float sw, float sh) {
+        if (!rain.on() || mc.player == null) return;
+        Gfx.newLayer();
+        Gfx.rain(sw, sh, 0.85f, 0.5f + mc.player.getPitch() / 180f);
+    }
+
+    private void drawSpace(float sw, float sh) {
+        int scene = switch (space.get()) { case "Planets" -> 1; case "Black Hole" -> 2; case "Nebula" -> 3; case "Galaxy" -> 4; case "End" -> 5; default -> 0; };
+        if (scene > 0) Gfx.sky(sw, sh, scene);
     }
 
     /** The colour the sky leans toward in the chosen mode. */

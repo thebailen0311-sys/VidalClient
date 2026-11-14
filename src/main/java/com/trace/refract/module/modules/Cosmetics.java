@@ -37,6 +37,15 @@ import java.util.Random;
 public class Cosmetics extends Module {
     public final ModeSetting knife = add(new ModeSetting("Knife", "Karambit", "Off", "Karambit", "Butterfly", "Tactical", "Bowie"));
     public final ModeSetting knifeWrap = add(new ModeSetting("Knife Wrap", "Fade", "Stainless", "Fade", "Theme", "Ruby", "Sapphire", "Emerald", "Gold", "Midnight"));
+    public final ModeSetting hat = add(new ModeSetting("Hat", "China Hat", "Off", "China Hat", "Crown"));
+    public final ModeSetting swingStyle = add(new ModeSetting("Swing Style", "Slash", "Slash", "Spin", "Stab", "Flip", "Whirl"));
+    public final ModeSetting handAnim = add(new ModeSetting("Hand Animation", "Smooth", "Off", "Smooth", "Spin", "Punch"));
+    public final BoolSetting killEffect = add(new BoolSetting("Kill Effect", true));
+    public final BoolSetting targetHud = add(new BoolSetting("Target HUD", true));
+    private net.minecraft.entity.LivingEntity target;
+    private float targetAt = -10, targetShow;
+    private boolean killDone;
+    public final BoolSetting hitBurst = add(new BoolSetting("Hit Burst", true));
     public final BoolSetting cape = add(new BoolSetting("Vanta Cape", true));
     public final BoolSetting elytra = add(new BoolSetting("Vanta Elytra", true));
     public final BoolSetting trail = add(new BoolSetting("Trail", true));
@@ -53,8 +62,74 @@ public class Cosmetics extends Module {
     public Cosmetics() {
         super("Cosmetics", "3D knives with wraps and animations (Inspect: V), glowing trail, sparkles, halo and aura.", Category.RENDER);
         com.trace.refract.mixin.SpecialModelTypesAccessor.refract$idMapper().put(KnifeRenderer.TYPE, KnifeRenderer.Unbaked.CODEC);
+        net.fabricmc.fabric.api.client.rendering.v1.LivingEntityFeatureRendererRegistrationCallback.EVENT.register((type, renderer, helper, ctx) -> {
+            if (renderer instanceof net.minecraft.client.render.entity.PlayerEntityRenderer<?> pr) helper.register(new com.trace.refract.render.HatFeature(pr));
+        });
+        // Hit burst: a ring of light bursts out of whatever you hit.
+        net.fabricmc.fabric.api.event.player.AttackEntityCallback.EVENT.register((player, world, hand, entity, hit) -> {
+            if (world.isClient() && isEnabled() && hitBurst.on() && player == mc.player) burst(entity.getBoundingBox().getCenter());
+            if (world.isClient() && player == mc.player && entity instanceof net.minecraft.entity.LivingEntity le) { target = le; targetAt = Time.seconds(); killDone = false; }
+            return net.minecraft.util.ActionResult.PASS;
+        });
         inspectKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.refract.inspect", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_V,
                 KeyBinding.Category.create(Identifier.of("refract", "cosmetics"))));
+    }
+
+    /** Kill effect: a pillar of light rises and a ring bursts outward where something you fought dies. */
+    private void kill(Vec3d at) {
+        Theme t = Themes.current();
+        for (int i = 0; i < 40; i++) {
+            double a = rng.nextDouble() * Math.PI * 2, r = rng.nextDouble() * 0.35;
+            Motes.spawn(at.x + Math.cos(a) * r, at.y + rng.nextDouble() * 0.4, at.z + Math.sin(a) * r, 0, 0.12 + rng.nextDouble() * 0.12, 0,
+                    24 + rng.nextInt(16), 0.06f + rng.nextFloat() * 0.04f, Colors.lerp(t.accent3(), 0xFFFFFFFF, 0.3f), t.accent());
+        }
+        for (int i = 0; i < 32; i++) {
+            double a = i * Math.PI * 2 / 32;
+            Motes.spawn(at.x, at.y + 0.1, at.z, Math.cos(a) * 0.25, 0.01, Math.sin(a) * 0.25, 14, 0.07f, t.accent2(), t.accent3());
+        }
+        Motes.spawn(at.x, at.y + 1, at.z, 0, 0, 0, 10, 0.6f, 0xFFFFFFFF, t.accent());
+    }
+
+    /** Target HUD: a glass card under the crosshair with the target's name, a gradient health bar and armour. */
+    @Override public void onHud(Theme t, float sw, float sh) {
+        if (!targetHud.on()) return;
+        boolean live = target != null && !target.isRemoved() && target.isAlive() && Time.seconds() - targetAt < 4 && mc.player != null && target.squaredDistanceTo(mc.player) < 36 * 36;
+        targetShow += ((live ? 1 : 0) - targetShow) * (1 - (float) Math.exp(-10 * Time.dt()));
+        if (targetShow < 0.02f || target == null) return;
+        float e = com.trace.refract.util.Anim.easeOutCubic(targetShow);
+        float w = 150, h = 40, x = sw / 2 - w / 2, y = sh / 2 + 30 + (1 - e) * 10;
+        float prev = com.trace.refract.render.Gfx.alpha;
+        com.trace.refract.render.Gfx.alpha = prev * e;
+        com.trace.refract.render.Gfx.frost(t, x, y, w, h, 12, 0.6f);
+        float hp = target.getHealth() + target.getAbsorptionAmount(), max = Math.max(1, target.getMaxHealth());
+        float frac = Math.min(1, hp / max);
+        com.trace.refract.render.Gfx.text(com.trace.refract.render.Gfx.ellipsize(target.getName().getString(), w - 70, com.trace.refract.render.Gfx.BODY, com.trace.refract.render.Font.Weight.BOLD),
+                x + 10, y + 6, com.trace.refract.render.Gfx.BODY, com.trace.refract.render.Font.Weight.BOLD, t.text());
+        String hpText = String.format(java.util.Locale.ROOT, "%.1f", hp);
+        int hpCol = Colors.lerp(0xFFF2555A, 0xFF34D399, frac);
+        float hw = com.trace.refract.render.Gfx.width(hpText, com.trace.refract.render.Gfx.BODY, com.trace.refract.render.Font.Weight.BOLD);
+        com.trace.refract.render.Gfx.text(hpText, x + w - 10 - hw, y + 6, com.trace.refract.render.Gfx.BODY, com.trace.refract.render.Font.Weight.BOLD, hpCol);
+        com.trace.refract.render.Gfx.round(x + 10, y + 22, w - 20, 5, 2.5f, 0x26FFFFFF);
+        com.trace.refract.render.Gfx.roundGradientH(x + 10, y + 22, Math.max(5, (w - 20) * frac), 5, 2.5f, Colors.lerp(hpCol, t.accent(), 0.3f), hpCol);
+        float ix = x + 10;
+        for (var slot : new net.minecraft.entity.EquipmentSlot[]{net.minecraft.entity.EquipmentSlot.HEAD, net.minecraft.entity.EquipmentSlot.CHEST,
+                net.minecraft.entity.EquipmentSlot.LEGS, net.minecraft.entity.EquipmentSlot.FEET, net.minecraft.entity.EquipmentSlot.MAINHAND}) {
+            var st = target.getEquippedStack(slot);
+            if (st.isEmpty()) continue;
+            com.trace.refract.render.Gfx.item(st, ix, y + 29, 9);
+            ix += 11;
+        }
+        com.trace.refract.render.Gfx.alpha = prev;
+    }
+
+    private void burst(Vec3d c) {
+        Theme t = Themes.current();
+        for (int i = 0; i < 26; i++) {
+            double a = i * Math.PI * 2 / 26, up = (rng.nextDouble() - 0.4) * 0.12;
+            Motes.spawn(c.x, c.y, c.z, Math.cos(a) * 0.16, up, Math.sin(a) * 0.16, 10 + rng.nextInt(6), 0.05f + rng.nextFloat() * 0.03f,
+                    Colors.lerp(t.accent(), 0xFFFFFFFF, 0.4f), t.accent2());
+        }
+        Motes.spawn(c.x, c.y, c.z, 0, 0, 0, 6, 0.35f, 0xFFFFFFFF, t.accent());
     }
 
     /** True when swords should be drawn as the chosen knife. */
@@ -67,6 +142,10 @@ public class Cosmetics extends Module {
 
     @Override public void onTick() {
         if (mc.player == null || mc.world == null) return;
+        if (killEffect.on() && target != null && !killDone && Time.seconds() - targetAt < 6 && (target.isDead() || target.getHealth() <= 0)) {
+            killDone = true;
+            kill(target.getEntityPos());
+        }
         ticks++;
         // Knife: play the draw animation whenever a sword comes out, inspect on the key.
         ItemStack held = mc.player.getMainHandStack();
