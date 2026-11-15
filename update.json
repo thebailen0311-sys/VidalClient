@@ -1,6 +1,6 @@
 {
-  "version": "1.0.12",
-  "notes": "Knife draws now have their own flourishes: the butterfly flips its handles open mid-twirl, the karambit spins twice around your finger, both throw sparks as they come out, and the arm snaps up to meet them. The GUI gained drifting aurora light behind the window, click ripples, a pulsing selected dock icon and a cursor-following glow on cards.",
-  "jar": "dist/vanta-1.0.12.jar",
-  "sha256": "3670400b6b9b826b342e00e48b1ae722c701dfe91dda728dfb857353d29a62c0"
+  "version": "1.0.13",
+  "notes": "Anchor Macro now actually detonates in the overworld: it charges with glowstone, swaps off glowstone and right-clicks the anchor, then waits for the pop, restores your slot and stops until you press it again (Auto Repeat is a setting). AutoCrystal defaults to instant actions, has Require Look so it never works a spot behind your camera, and faster item swaps. New Account page with a spinning 3D player preview and DonutSMP stats tiles.",
+  "jar": "dist/vanta-1.0.13.jar",
+  "sha256": "ca57e84b8083048b45d14a0e4ac89f3eee25d0961c0092abbbc378cee27aa0a0"
 }

@@ -52,7 +52,7 @@ public class ClickGuiScreen extends Screen {
     private static final float OPEN_S = 0.26f, CLOSE_S = 0.17f, DRAWER_S = 0.30f, STAGGER_S = 0.035f, ENTER_S = 0.32f;
     private static final DateTimeFormatter CLOCK = DateTimeFormatter.ofPattern("HH:mm");
 
-    private enum Panel { NONE, MODULE, SETTINGS, THEME }
+    private enum Panel { NONE, MODULE, SETTINGS, THEME, ACCOUNT }
 
     // Persistent between openings (saved with the config)
     private static Category category = Category.HUNTING;
@@ -91,6 +91,9 @@ public class ClickGuiScreen extends Screen {
 
     /** Test hook: show the theme drawer. */
     public static void focusTheme() { panel = Panel.THEME; }
+
+    /** Test hook: open the account page. */
+    public static void focusAccount() { panel = Panel.ACCOUNT; }
 
     // ------------------------------------------------------------------ hit regions
 
@@ -248,6 +251,7 @@ public class ClickGuiScreen extends Screen {
         drawRipples();
         Gfx.end();
         m.popMatrix();
+        drawAccountAvatar(ctx);
     }
 
     /** Four additive glows drifting behind the window: cheap, always moving, and different every second. */
@@ -276,6 +280,68 @@ public class ClickGuiScreen extends Screen {
         }
     }
 
+    // ------------------------------------------------------------------ account
+
+    private float avatarX, avatarY, avatarW, avatarH;
+    private boolean avatarReady;
+
+    /** Stats card: a live 3D player preview on the left, DonutSMP numbers on the right. */
+    private float accountBody(Theme t, float x, float y, float w, float ly, float lh) {
+        var a = com.trace.refract.util.AccountStats.class;
+        float cw = Math.min(176, w * 0.36f), ch = Math.max(150, Math.min(212, lh - 16));
+        Gfx.shadow(x, y, cw, ch, 16, 12, 0x42000000);
+        Gfx.glassBody(t, x, y, cw, ch, 16, 0.35f);
+        Gfx.text(Gfx.ellipsize(playerName(), cw - 20, Gfx.BODY + 1, Font.Weight.BOLD), x + 10, y + 9, Gfx.BODY + 1, Font.Weight.BOLD, t.text());
+        Gfx.text("DonutSMP", x + 10, y + 22, Gfx.SMALL, t.textDim());
+        String status = com.trace.refract.util.AccountStats.loading ? "loading…" : com.trace.refract.util.AccountStats.status;
+        Gfx.round(x + 8, y + ch - 27, cw - 16, 19, 9.5f, 0x1AFFFFFF);
+        Gfx.text(Gfx.ellipsize(status, cw - 26, Gfx.SMALL - 0.5f, Font.Weight.SEMIBOLD), x + 13, y + ch - 22.5f, Gfx.SMALL - 0.5f, Font.Weight.SEMIBOLD,
+                com.trace.refract.util.AccountStats.status.startsWith("live") ? 0xFF5CFFB0 : t.accent());
+        avatarX = x + 8;
+        avatarY = y + 34;
+        avatarW = cw - 16;
+        avatarH = ch - 66;
+        avatarReady = true;
+
+        String[][] tiles = {
+                {"Money", com.trace.refract.util.AccountStats.money},
+                {"Playtime", com.trace.refract.util.AccountStats.playtime},
+                {"Shards", com.trace.refract.util.AccountStats.shards},
+                {"Kills", com.trace.refract.util.AccountStats.kills},
+                {"Deaths", com.trace.refract.util.AccountStats.deaths},
+                {"Mob kills", com.trace.refract.util.AccountStats.mobs},
+                {"Blocks placed", com.trace.refract.util.AccountStats.placed},
+                {"Blocks broken", com.trace.refract.util.AccountStats.broken},
+        };
+        float tx = x + cw + 10, tw = w - cw - 10, gap = 7;
+        float cellW = (tw - gap) / 2f, cellH = Math.max(32, Math.min(44, (lh - 18) / 4f - gap));
+        for (int i = 0; i < tiles.length; i++) {
+            float cx = tx + (i % 2) * (cellW + gap), cy = y + (i / 2) * (cellH + gap);
+            Gfx.round(cx, cy, cellW, cellH, 12, 0x16FFFFFF);
+            Gfx.outline(cx, cy, cellW, cellH, 12, 1, 0x18FFFFFF, 0x08FFFFFF);
+            Gfx.text(tiles[i][0], cx + 10, cy + 7, Gfx.SMALL - 0.5f, Font.Weight.SEMIBOLD, t.textDim());
+            String v = tiles[i][1] == null || tiles[i][1].isBlank() ? "—" : tiles[i][1];
+            Gfx.text(Gfx.ellipsize(v, cellW - 20, Gfx.BODY + 3, Font.Weight.BOLD), cx + 10, cy + 19, Gfx.BODY + 3, Font.Weight.BOLD, t.text());
+        }
+        return y + Math.max(ch, 4 * cellH + 3 * gap) + 8;
+    }
+
+    /** The spinning player, drawn after the custom GUI pass so the vanilla entity renderer keeps its own state. */
+    private void drawAccountAvatar(DrawContext ctx) {
+        var player = net.minecraft.client.MinecraftClient.getInstance().player;
+        if (!avatarReady || panel != Panel.ACCOUNT || player == null || openT < 0.45f) return;
+        avatarReady = false;
+        org.joml.Vector2f p = new org.joml.Vector2f(avatarX, avatarY);
+        view.transformPosition(p);
+        float ax = p.x, ay = p.y, aw = avatarW * scale, ah = avatarH * scale;
+        float spin = (float) Math.sin(Time.seconds() * 0.9) * 150f;
+        try {
+            net.minecraft.client.gui.screen.ingame.InventoryScreen.drawEntity(ctx,
+                    (int) ax, (int) ay, (int) (ax + aw), (int) (ay + ah), (int) (ah * 0.62f), 0f,
+                    ax + aw / 2 + spin, ay + ah / 2, player);
+        } catch (Throwable ignored) { }
+    }
+
     // ------------------------------------------------------------------ dock
 
     private String dockTip;
@@ -300,7 +366,7 @@ public class ClickGuiScreen extends Screen {
         Gfx.logo(t, x + w / 2 - 10, y + 12, 20);
         hits.add(new Hit(HitType.DRAG, x, y, w, 40, null, null));
         Category[] cats = Category.values();
-        int bottomItems = 3;
+        int bottomItems = 4;
         float bub = MathHelper.clamp((h - 46 - 26) / (cats.length + bottomItems) - 5, 18, 30);
         float step = bub + 5;
         float cy = y + 46;
@@ -313,7 +379,7 @@ public class ClickGuiScreen extends Screen {
         }
         float by = y + h - 10 - bottomItems * (bub + 5) + 5;
         Gfx.round(x + 12, by - 4, w - 24, 1, 0.5f, 0x1CFFFFFF);
-        Object[][] general = {{Panel.SETTINGS, "Settings"}, {Panel.THEME, "Theme"}, {null, "HUD Editor"}};
+        Object[][] general = {{Panel.ACCOUNT, "Account"}, {Panel.SETTINGS, "Settings"}, {Panel.THEME, "Theme"}, {null, "HUD Editor"}};
         for (Object[] g : general) {
             dockItem(t, x + w / 2, by + bub / 2, bub, g[0] != null && panel == g[0], (String) g[1], 0, null, null, g);
             by += bub + 5;
@@ -337,6 +403,7 @@ public class ClickGuiScreen extends Screen {
         }
         int col = sel ? 0xFFFFFFFF : Colors.lerp(t.textDim(), t.text(), hov ? 0.7f : 0f);
         if (cat != null) icon(cat, cx, cy, col, t);
+        else if ("Account".equals(label)) personIcon(cx, cy, col);
         else if ("Settings".equals(label)) gearIcon(cx, cy, col);
         else if ("Theme".equals(label)) paletteIcon(t, cx, cy, col);
         else hudIcon(cx, cy, col);
@@ -349,6 +416,12 @@ public class ClickGuiScreen extends Screen {
         if (hov) { dockTip = label; dockTipX = x + size + 10; dockTipY = cy; }
         if (cat != null) hits.add(new Hit(HitType.CATEGORY, x, y, size, size, cat, null));
         else hits.add(new Hit(HitType.GENERAL, x, y, size, size, general[0], general[1]));
+    }
+
+    /** A simple head-and-shoulders glyph for the account page. */
+    private static void personIcon(float cx, float cy, int col) {
+        Gfx.circle(cx, cy - 3.4f, 3.6f, col);
+        Gfx.roundGradient(cx - 6.2f, cy + 1.2f, 12.4f, 6.6f, 3.3f, col, Colors.withAlpha(col, 0x80));
     }
 
     private static void hudIcon(float cx, float cy, int col) {
@@ -403,8 +476,10 @@ public class ClickGuiScreen extends Screen {
         floating(t, x, y, w, h, 18, 0.5f);
         boolean searching = !search.isEmpty();
         List<Module> mods = visibleModules();
-        String title = searching ? "Search" : panel == Panel.SETTINGS ? "Settings" : panel == Panel.THEME ? "Theme" : category.label;
+        if (panel == Panel.ACCOUNT) com.trace.refract.util.AccountStats.refreshIfStale();
+        String title = searching ? "Search" : panel == Panel.ACCOUNT ? "Account" : panel == Panel.SETTINGS ? "Settings" : panel == Panel.THEME ? "Theme" : category.label;
         String sub = searching ? mods.size() + (mods.size() == 1 ? " result" : " results")
+                : panel == Panel.ACCOUNT ? com.trace.refract.util.AccountStats.status
                 : panel == Panel.SETTINGS ? "Window, glass and sound" : panel == Panel.THEME ? "Accent colours for the whole client"
                 : mods.stream().filter(Module::isEnabled).count() + " of " + mods.size() + " active  ·  " + category.subtitle;
         Gfx.text(title, x + 18, y + 12, Gfx.LARGE + 2, Font.Weight.BOLD, t.text());
@@ -416,7 +491,10 @@ public class ClickGuiScreen extends Screen {
         gridScroll.to(gridTarget).update(animated() ? dt : 1f);
         Gfx.scissor(x + 2, ly, w - 4, lh);
         float yy = ly + 4 - gridScroll.value, top = yy;
-        if (!searching && (panel == Panel.SETTINGS || panel == Panel.THEME)) {
+        if (!searching && panel == Panel.ACCOUNT) {
+            float px = lx + 8, pw = lw - 16;
+            yy = accountBody(t, px, yy, pw, ly, lh);
+        } else if (!searching && (panel == Panel.SETTINGS || panel == Panel.THEME)) {
             float px = lx + 8, pw = lw - 16;
             if (panel == Panel.THEME) yy = themeBody(t, px, yy, pw, ly, lh);
             else {

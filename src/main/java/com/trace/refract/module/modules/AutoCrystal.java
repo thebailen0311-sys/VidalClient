@@ -27,8 +27,11 @@ import net.minecraft.util.math.Vec3d;
 public class AutoCrystal extends Module {
     public final NumberSetting placeRange = add(new NumberSetting("Place Range", 4.2, 2, 4.2, 0.1, "m"));
     public final NumberSetting breakRange = add(new NumberSetting("Break Range", 2.9, 1, 3, 0.05, "m"));
-    public final NumberSetting crystalDelay = add(new NumberSetting("Crystal Speed", 2, 0, 20, 1, "t"));
-    public final NumberSetting obsidianDelay = add(new NumberSetting("Obsidian Speed", 2, 0, 20, 1, "t"));
+    public final NumberSetting crystalDelay = add(new NumberSetting("Crystal Speed", 0, 0, 20, 1, "t"));
+    public final NumberSetting obsidianDelay = add(new NumberSetting("Obsidian Speed", 0, 0, 20, 1, "t"));
+    /** The spot has to be in front of the camera, not just under a stale silent rotation. */
+    public final BoolSetting requireLook = add(new BoolSetting("Require Look", true));
+    public final NumberSetting lookAngle = add(new NumberSetting("Look Angle", 25, 5, 90, 5, "°"));
     public final BoolSetting autoObsidian = add(new BoolSetting("Place Obsidian", true));
     public final BoolSetting swapBack = add(new BoolSetting("Swap Back", true));
 
@@ -71,14 +74,18 @@ public class AutoCrystal extends Module {
 
     private static boolean settled(Vec3d at) { return Rotations.onTarget(at, 10f); }
 
-    @Override public void onTick() {
+    @Override     public void onTick() {
         if (mc.player == null || mc.world == null || mc.interactionManager == null) return;
         if (timer > 0) { timer--; return; }
         if (Combat.internalAction()) return;
+        // A latched spot does not stay valid when you turn away: keep acting only on what you are actually facing.
+        if (requireLook.on() && base != null && !lookingAt(base)) { base = null; support = null; step = Step.PICK; return; }
+
 
         switch (step) {
             case PICK -> {
                 if (base == null && !pick()) return;
+                if (requireLook.on() && !lookingAt(base)) { base = null; step = Step.PICK; return; }
                 EndCrystalEntity crystal = Combat.crystalNear(base, breakRange.get());
                 if (crystal != null) { step = Step.BREAK; return; }
                 var state = mc.world.getBlockState(base);
@@ -90,7 +97,7 @@ public class AutoCrystal extends Module {
                 if (!Combat.holding(Items.OBSIDIAN)) {
                     // Bounded: if the item cannot be selected, stop instead of swapping in place forever.
                     if (++swapAttempts > 5 || !Combat.holdItem(Items.OBSIDIAN)) { step = Step.DONE; return; }
-                    timer = 2; // the held item has to reach the server before the placement does
+                    timer = 1; // the held item has to reach the server before the placement does
                     return;
                 }
                 swapAttempts = 0;
@@ -119,7 +126,7 @@ public class AutoCrystal extends Module {
             case SWAP_CRYSTAL -> {
                 if (!Combat.holding(Items.END_CRYSTAL)) {
                     if (++swapAttempts > 5 || !Combat.holdItem(Items.END_CRYSTAL)) { step = Step.DONE; return; }
-                    timer = 2;
+                    timer = 1;
                     return;
                 }
                 swapAttempts = 0;
@@ -162,6 +169,16 @@ public class AutoCrystal extends Module {
      * (for example one placed a moment earlier) resolved to the air above it and placed another obsidian there,
      * which is the stacking you saw.
      */
+    /** True when the camera itself is pointed at the block, independent of any silent rotation. */
+    private boolean lookingAt(BlockPos pos) {
+        if (mc.player == null) return false;
+        Vec3d eye = mc.player.getEyePos();
+        Vec3d to = pos.toCenterPos().subtract(eye).normalize();
+        Vec3d look = mc.player.getRotationVec(1f).normalize();
+        double deg = Math.toDegrees(Math.acos(Math.max(-1, Math.min(1, look.dotProduct(to)))));
+        return deg <= lookAngle.get();
+    }
+
     private boolean pick() {
         var hit = Combat.aimedBlock(placeRange.get() + 0.5);
         if (hit == null) return false;

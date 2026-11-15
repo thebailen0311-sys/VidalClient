@@ -35,11 +35,13 @@ public class AnchorMacro extends Module {
     public final NumberSetting explodeDelay = add(new NumberSetting("Explode Delay", 2, 0, 20, 1, "t"));
     public final NumberSetting snapSpeed = add(new NumberSetting("Snap Speed", 24, 4, 60, 1, "°/t"));
     public final BoolSetting restore = add(new BoolSetting("Restore Slot", true));
+    /** Off by default: one press is one pop, instead of re-placing the anchor every tick you hold the bind. */
+    public final BoolSetting autoRepeat = add(new BoolSetting("Auto Repeat", false));
 
     /** Extra bind that starts a whole run without switching the module on. -1 is unbound. */
     public int placeKey = -1;
 
-    private static final int IDLE = 0, PLACE = 1, WAIT_ANCHOR = 2, SAFE_AIM = 3, SAFE_PLACE = 4, CHARGE = 5, FINISH = 6, DONE = 7;
+    private static final int IDLE = 0, PLACE = 1, WAIT_ANCHOR = 2, SAFE_AIM = 3, SAFE_PLACE = 4, CHARGE = 5, DETONATE = 6, WAIT_POP = 7, FINISH = 8, DONE = 9;
 
     private int step, timer, clicks, wait, originalSlot = -1;
     private BlockPos support, anchor;
@@ -158,12 +160,25 @@ public class AnchorMacro extends Module {
                 wait = 0;
             }
             case CHARGE -> charge();
+            case DETONATE -> detonate();
+            case WAIT_POP -> {
+                if (anchor == null || mc.world.getBlockState(anchor).getBlock() != Blocks.RESPAWN_ANCHOR) { step = FINISH; return; }
+                if (++wait > 12) {
+                    if (clicks < 9) { step = DETONATE; wait = 0; timer = 1; }
+                    else step = FINISH;
+                    return;
+                }
+                timer = 2;
+            }
             case FINISH -> {
                 restoreSlot();
-                // A held bind keeps running: go back to idle so the next press (or the next anchor in front of
-                // you) starts a fresh cycle. Previously it parked in DONE and only ever popped once.
+                clicks = 0;
+                safeDone = false;
+                // One run per press unless Auto Repeat is on. The old code fell straight back to IDLE, which made a
+                // held bind place and re-place an anchor forever and locked the hotbar on glowstone.
                 if (oneShot) { oneShot = false; step = DONE; setEnabled(false, false); }
-                else { step = IDLE; timer = placeDelay.asInt(); wait = 0; clicks = 0; safeDone = false; }
+                else if (autoRepeat.on()) { step = IDLE; timer = placeDelay.asInt(); wait = 0; }
+                else { step = DONE; }
             }
             default -> { }
         }
@@ -199,17 +214,56 @@ public class AnchorMacro extends Module {
         if (!Combat.useBlock(anchor, Direction.UP)) { timer = 1; return; }
         clicks++;
         timer = explodeDelay.asInt();
-        // In the Nether the first glowstone charges the anchor and the second one pops it.
-        boolean popped = mc.world.getBlockState(anchor).getBlock() != Blocks.RESPAWN_ANCHOR;
-        if (popped || clicks >= (nether() ? 2 : 1)) step = FINISH;
+        // Nether: glowstone detonates the anchor outright. Overworld: it only charges it, and the anchor has to be
+        // right-clicked with anything that is NOT glowstone to explode. The old code stopped after charging, which
+        // is why it placed and charged but never exploded.
+        if (nether()) step = WAIT_POP;
+        else step = DETONATE;
     }
+
+    /** Overworld pop: hold anything except glowstone and right-click the charged anchor. */
+    private void detonate() {
+        if (anchor == null) { step = FINISH; return; }
+        if (!holdNonGlowstone()) { timer = 1; return; }
+        lookAt(anchor.toCenterPos());
+        if (!Rotations.onTarget(anchor.toCenterPos(), 12f)) return;
+        if (Combat.useBlock(anchor, Direction.UP)) {
+            clicks++;
+            timer = explodeDelay.asInt();
+            step = WAIT_POP;
+            wait = 0;
+        } else {
+            timer = 1;
+        }
+    }
+
+    /** True when the main hand holds something that can trigger the pop (anything but glowstone). */
+    private boolean holdNonGlowstone() {
+        if (mc.player == null) return false;
+        var inv = mc.player.getInventory();
+        if (!inv.getStack(inv.getSelectedSlot()).isOf(Items.GLOWSTONE) && !inv.getStack(inv.getSelectedSlot()).isEmpty()) return true;
+        for (int i = 0; i < 9; i++) {
+            var s = inv.getStack(i);
+            if (!s.isEmpty() && !s.isOf(Items.GLOWSTONE)) { inv.setSelectedSlot(i); return true; }
+        }
+        for (int i = 9; i < 36; i++) {
+            var s = inv.getStack(i);
+            if (s.isEmpty() || s.isOf(Items.GLOWSTONE)) continue;
+            Combat.holdItem(s.getItem());
+            return false; // the swap lands next tick
+        }
+        return false;
+    }
+
+    public int debugStep() { return step; }
 
     @Override public String suffix() {
         if (!isEnabled()) return null;
         return switch (step) {
             case PLACE, WAIT_ANCHOR -> "placing";
             case SAFE_AIM, SAFE_PLACE -> "safe";
-            case CHARGE -> "popping";
+            case CHARGE -> "charging";
+            case DETONATE, WAIT_POP -> "popping";
             case FINISH, DONE -> "done";
             default -> null;
         };

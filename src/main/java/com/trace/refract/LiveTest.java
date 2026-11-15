@@ -340,6 +340,32 @@ public final class LiveTest {
                     log("base t=" + ticks + " n=" + ModuleManager.baseFinder.candidates.size() + " [" + sb + "]");
                 }
             }
+            case "account" -> {
+                if (ticks == 40) { com.trace.refract.gui.ClickGuiScreen.focusAccount(); mc.setScreen(new com.trace.refract.gui.ClickGuiScreen()); log("account gui open"); }
+                if (ticks == 90) shoot(mc, "gui-account.png");
+                if (ticks == 110) mc.setScreen(null);
+            }
+            case "anchor2" -> {
+                if (ticks == 60) {
+                    enable("anchor macro", true);
+                    cmd(mc, "setblock ^ ^1 ^2 minecraft:stone");
+                    mc.player.setYaw(0f);
+                    mc.player.setPitch(34f);
+                    log("anchor macro armed at " + mc.player.getBlockPos());
+                }
+                if (ticks == 70) { var inv = mc.player.getInventory(); for (int i = 0; i < 9; i++) log("hotbar " + i + "=" + inv.getStack(i).getItem()); }
+                if (ticks == 90 || ticks == 130 || ticks == 180) {
+                    var p = mc.player.getBlockPos();
+                    java.util.Map<String, Integer> seen = new java.util.TreeMap<>();
+                    for (var bp : BlockPos.iterate(p.add(-3, -2, -3), p.add(3, 2, 3))) {
+                        var id = net.minecraft.registry.Registries.BLOCK.getId(mc.world.getBlockState(bp).getBlock()).getPath();
+                        if (id.contains("anchor") || id.equals("fire") || id.equals("air")) seen.merge(id, 1, Integer::sum);
+                    }
+                    log("anchor state=" + ModuleManager.anchorMacro.suffix() + " step=" + ModuleManager.anchorMacro.debugStep() + " blocks=" + seen + " t=" + ticks);
+                }
+                if (ticks == 100) shoot(mc, "anchor-result.png");
+                if (ticks == 200) { log("anchor final=" + ModuleManager.anchorMacro.suffix()); enable("anchor macro", false); }
+            }
             case "knives" -> {
                 if (ticks == 30) {
                     cmd(mc, "gamemode creative");
