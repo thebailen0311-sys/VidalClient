@@ -1,6 +1,6 @@
 {
-  "version": "1.0.14",
-  "notes": "The client is now Vidal, with a new V icon and wordmark. The window uses a fixed layout that scales to fit your GUI scale instead of overlapping and clipping, the dock icons are redrawn, and the Account page has a taller showcase plate so the spinning character no longer clips at the head or feet.",
-  "jar": "dist/vanta-1.0.14.jar",
-  "sha256": "44efb48b38d6981bcd1719233bcb1e3ccc1c7e7671eef8e454c8090f24ac1d86"
+  "version": "1.1.0",
+  "notes": "A big reliability and combat pass. Modules are now crash-isolated and quarantined instead of taking the client down, configs save atomically with a backup, and AutoCrystal got camera-aware spot picking, reach-safe placement, faster re-arm and a proper break cycle. Anchor Macro re-arms after each detonation, the Account page now shows a clean spinning character, stats, K/D, refresh and clipboard API-key import with live market prices, and the GUI has a fixed scaling layout, animated dock, new Vidal icons and a cached text renderer.",
+  "jar": "dist/vanta-1.1.0.jar",
+  "sha256": "600a2e445226c3f73296eaf686aa37902ee2bfa6f25ffe334770f9d72585c03b"
 }

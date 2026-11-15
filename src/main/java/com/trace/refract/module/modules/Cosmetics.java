@@ -35,6 +35,8 @@ import java.util.Random;
  * </ul>
  */
 public class Cosmetics extends Module {
+    /** Set while the Account page renders its preview, so capes, elytra and hats stay out of the portrait. */
+    public static volatile boolean preview;
     public final ModeSetting knife = add(new ModeSetting("Knife", "Karambit", "Off", "Karambit", "Butterfly", "Tactical", "Bowie"));
     public final ModeSetting knifeWrap = add(new ModeSetting("Knife Wrap", "Fade", "Stainless", "Fade", "Theme", "Ruby", "Sapphire", "Emerald", "Gold", "Midnight"));
     public final ModeSetting hat = add(new ModeSetting("Hat", "China Hat", "Off", "China Hat", "Crown"));

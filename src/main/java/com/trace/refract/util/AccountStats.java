@@ -26,19 +26,96 @@ import java.util.Locale;
  */
 public final class AccountStats {
     private static final Path KEY = FabricLoader.getInstance().getConfigDir().resolve("refract-market.json");
+    private static final Path CACHE = FabricLoader.getInstance().getConfigDir().resolve("refract-account-cache.json");
     private static final String BASE = "https://api.donutsmp.net/v1";
     private static final long TTL = 300_000L;
 
     public static volatile String name = "";
     public static volatile String status = "not loaded";
+    public static volatile String lastUpdate = "";
     public static volatile long fetchedAt;
     public static volatile boolean loading;
     public static volatile String token = "";
 
     public static volatile String money = "", playtime = "", shards = "", kills = "", deaths = "";
+    public static volatile long killsRaw, deathsRaw;
     public static volatile String mobs = "", placed = "", broken = "", sell = "";
 
     private AccountStats() {}
+
+    /** Cached last known stats, so the Account page is not blank for the first seconds after launch (or offline). */
+    static {
+        try {
+            if (Files.exists(CACHE)) {
+                JsonObject c = JsonParser.parseString(Files.readString(CACHE)).getAsJsonObject();
+                name = c.has("name") ? c.get("name").getAsString() : "";
+                money = s(c, "money"); playtime = s(c, "playtime"); shards = s(c, "shards");
+                kills = s(c, "kills"); deaths = s(c, "deaths"); mobs = s(c, "mobs");
+                placed = s(c, "placed"); broken = s(c, "broken");
+                killsRaw = c.has("killsRaw") ? c.get("killsRaw").getAsLong() : 0;
+                deathsRaw = c.has("deathsRaw") ? c.get("deathsRaw").getAsLong() : 0;
+                lastUpdate = c.has("saved") ? c.get("saved").getAsString() : "";
+                fetchedAt = c.has("at") ? c.get("at").getAsLong() : 0;
+                if (!name.isBlank()) status = "cached · " + lastUpdate;
+            }
+        } catch (Exception ignored) { }
+    }
+
+    private static String s(JsonObject o, String k) {
+        return o.has(k) && !o.get(k).isJsonNull() ? o.get(k).getAsString() : "—";
+    }
+
+    private static void saveCache() {
+        try {
+            JsonObject c = new JsonObject();
+            c.addProperty("name", name); c.addProperty("money", money); c.addProperty("playtime", playtime);
+            c.addProperty("shards", shards); c.addProperty("kills", kills); c.addProperty("deaths", deaths);
+            c.addProperty("mobs", mobs); c.addProperty("placed", placed); c.addProperty("broken", broken);
+            c.addProperty("killsRaw", killsRaw); c.addProperty("deathsRaw", deathsRaw);
+            c.addProperty("saved", lastUpdate); c.addProperty("at", fetchedAt);
+            Files.createDirectories(CACHE.getParent());
+            Path tmp = CACHE.resolveSibling("refract-account-cache.json.tmp");
+            Files.writeString(tmp, new com.google.gson.GsonBuilder().setPrettyPrinting().create().toJson(c));
+            Files.move(tmp, CACHE, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        } catch (Exception e) { Refract.LOG.debug("account cache write failed", e); }
+    }
+
+    /** Forces the next {@link #refreshIfStale()} to fetch, even if the cache is still warm. */
+    public static void refreshNow() {
+        fetchedAt = 0;
+        name = "";
+        status = "refreshing…";
+        refreshIfStale();
+    }
+
+    /**
+     * Takes an API key from the clipboard and writes it to config/refract-market.json without ever logging it. Keys are
+     * made in game with {@code /api}; the clipboard route avoids asking anyone to paste a secret into chat.
+     */
+    public static String useClipboardKey() {
+        try {
+            String key = MinecraftClient.getInstance().keyboard.getClipboard();
+            key = key == null ? "" : key.trim();
+            if (key.length() < 8 || key.length() > 200 || key.chars().anyMatch(Character::isWhitespace)) {
+                return "Clipboard does not contain an API key. Copy the key from /api first.";
+            }
+            JsonObject o = new JsonObject();
+            if (Files.exists(KEY)) {
+                try {
+                    JsonElement old = JsonParser.parseString(Files.readString(KEY));
+                    if (old.isJsonObject()) o = old.getAsJsonObject();
+                } catch (Exception ignored) { }
+            }
+            o.addProperty("apiKey", key);
+            o.addProperty("note", "Key from /api in game. Kept local; never send it to anyone.");
+            Files.createDirectories(KEY.getParent());
+            Files.writeString(KEY, new com.google.gson.GsonBuilder().setPrettyPrinting().create().toJson(o));
+            refreshNow();
+            return "API key saved locally. Refreshing stats…";
+        } catch (Exception e) {
+            return "Could not save the key (" + e.getClass().getSimpleName() + ").";
+        }
+    }
 
     public static void refreshIfStale() {
         MinecraftClient mc = MinecraftClient.getInstance();
@@ -48,7 +125,7 @@ public final class AccountStats {
         if (name.equals(user) && now - fetchedAt < TTL) return;
         name = user;
         loading = true;
-        Thread t = new Thread(() -> fetch(user), "Vanta account stats");
+        Thread t = new Thread(() -> fetch(user), "Vidal account stats");
         t.setDaemon(true);
         t.start();
     }
@@ -73,12 +150,16 @@ public final class AccountStats {
             shards = str(r, "shards");
             kills = str(r, "kills");
             deaths = str(r, "deaths");
+            killsRaw = raw(r, "kills");
+            deathsRaw = raw(r, "deaths");
             mobs = str(r, "mobs_killed");
             placed = str(r, "placed_blocks");
             broken = str(r, "broken_blocks");
             sell = str(r, "money_made_from_sell");
-            status = "live · " + user;
+            lastUpdate = java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"));
+            status = "live · updated " + lastUpdate;
             fetchedAt = System.currentTimeMillis();
+            saveCache();
         } catch (Exception ex) {
             status = "API offline (" + ex.getClass().getSimpleName() + ")";
             Refract.LOG.debug("account stats failed", ex);
@@ -94,6 +175,21 @@ public final class AccountStats {
             JsonElement e = JsonParser.parseString(Files.readString(KEY));
             return e.isJsonObject() && e.getAsJsonObject().has("apiKey") ? e.getAsJsonObject().get("apiKey").getAsString().trim() : "";
         } catch (Exception e) { return ""; }
+    }
+
+    /** Kills per death, two decimals; 0 deaths reads as the raw kill count. */
+    public static String kd() {
+        if (killsRaw <= 0 && deathsRaw <= 0) return "—";
+        if (deathsRaw <= 0) return killsRaw + ".00";
+        return String.format(Locale.ROOT, "%.2f", killsRaw / (double) deathsRaw);
+    }
+
+    private static long raw(JsonObject o, String k) {
+        try {
+            if (!o.has(k) || o.get(k).isJsonNull()) return 0;
+            String v = o.get(k).getAsString().replace(",", "").trim();
+            return (long) Double.parseDouble(v);
+        } catch (Exception e) { return 0; }
     }
 
     private static String str(JsonObject o, String k) {

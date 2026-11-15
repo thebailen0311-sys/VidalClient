@@ -12,6 +12,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.HashSet;
 
 public final class ModuleManager {
     public static final List<Module> MODULES = new ArrayList<>();
@@ -56,6 +58,11 @@ public final class ModuleManager {
 
     private static final Map<Module, Boolean> keyDown = new HashMap<>();
     private static final Map<Module, Boolean> placeDown = new HashMap<>();
+    /** Consecutive failures per module, so one broken module can be isolated and switched off. */
+    private static final Map<Module, Integer> failures = new HashMap<>();
+    private static final Map<Module, Long> failureLogAt = new HashMap<>();
+    /** Modules that failed repeatedly and stay parked until the user switches them on again. */
+    private static final Set<Module> quarantined = new HashSet<>();
 
     private ModuleManager() {}
 
@@ -121,14 +128,47 @@ public final class ModuleManager {
         }
         com.trace.refract.util.Prof.tick();
         for (Module m : MODULES) {
-            long t0 = System.nanoTime();
-            m.onAlwaysTick();
-            if (m.isEnabled()) {
-                com.trace.refract.util.NetLog.setModule(m.name);
-                m.onTick();
-                com.trace.refract.util.NetLog.setModule(null);
+            if (quarantined.contains(m)) {
+                if (!m.isEnabled()) continue;
+                quarantined.remove(m); // an explicit re-enable is also a retry
             }
+            long t0 = System.nanoTime();
+            safe(m, "tick", () -> {
+                m.onAlwaysTick();
+                if (m.isEnabled()) {
+                    com.trace.refract.util.NetLog.setModule(m.name);
+                    try { m.onTick(); } finally { com.trace.refract.util.NetLog.setModule(null); }
+                }
+            });
             com.trace.refract.util.Prof.add("t:" + m.name, System.nanoTime() - t0);
+        }
+    }
+
+    /**
+     * Runs one module phase without letting its exception reach the client tick or the renderer. A single bad state
+     * (a null entity, a server packet arriving at a strange time) used to take down every module and sometimes the
+     * client with it. It is now logged, rate limited, and after a few consecutive failures that module is switched off
+     * with a chat note instead of spamming the log every tick.
+     */
+    private static void safe(Module m, String phase, Runnable body) {
+        if (quarantined.contains(m)) return;
+        try {
+            body.run();
+            failures.remove(m);
+        } catch (Throwable t) {
+            int n = failures.merge(m, 1, Integer::sum);
+            long now = System.currentTimeMillis();
+            if (now - failureLogAt.getOrDefault(m, 0L) > 5000L) {
+                failureLogAt.put(m, now);
+                com.trace.refract.Refract.LOG.error("{} failed in {} ({} in a row)", m.name, phase, n, t);
+            }
+            if (n >= 3) {
+                failures.remove(m);
+                quarantined.add(m);
+                com.trace.refract.Refract.LOG.error("Disabling {} after repeated {} failures", m.name, phase);
+                try { m.setEnabled(false, false); } catch (Throwable ignored) { }
+                try { com.trace.refract.Refract.chat("§c" + m.name + " hit an error and was turned off."); } catch (Throwable ignored) { }
+            }
         }
     }
 
@@ -138,7 +178,7 @@ public final class ModuleManager {
         for (Module m : MODULES) {
             if (!m.isEnabled()) continue;
             long t0 = System.nanoTime();
-            m.onWorldRender(tickDelta);
+            safe(m, "world render", () -> m.onWorldRender(tickDelta));
             com.trace.refract.util.Prof.add("esp:" + m.name, System.nanoTime() - t0);
         }
     }
@@ -147,7 +187,7 @@ public final class ModuleManager {
         for (Module m : MODULES) {
             if (!m.isEnabled()) continue;
             long t0 = System.nanoTime();
-            m.onHud(t, w, h);
+            safe(m, "hud", () -> m.onHud(t, w, h));
             com.trace.refract.util.Prof.add("hud:" + m.name, System.nanoTime() - t0);
         }
     }

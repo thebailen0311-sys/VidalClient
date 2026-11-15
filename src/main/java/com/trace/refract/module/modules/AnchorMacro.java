@@ -44,7 +44,7 @@ public class AnchorMacro extends Module {
     private static final int IDLE = 0, PLACE = 1, WAIT_ANCHOR = 2, SAFE_AIM = 3, SAFE_PLACE = 4, CHARGE = 5, DETONATE = 6, WAIT_POP = 7, FINISH = 8, DONE = 9;
 
     private int step, timer, clicks, wait, originalSlot = -1;
-    private BlockPos support, anchor;
+    private BlockPos support, anchor, lastDone;
     private Direction side;
     private boolean safeDone, oneShot;
 
@@ -61,6 +61,7 @@ public class AnchorMacro extends Module {
         anchor = null;
         support = null;
         safeDone = false;
+        lastDone = null;
     }
 
     @Override public void onDisable() {
@@ -97,7 +98,16 @@ public class AnchorMacro extends Module {
 
     @Override public void onTick() {
         if (mc.player == null || mc.world == null) return;
-        if (step == DONE) return;
+        if (mc.currentScreen != null) return; // a container or chat open cancels the run instead of fighting it
+        if (step == DONE) {
+            // Look at a different block to re-arm. One press is still one pop (Auto Repeat is opt-in), but a
+            // finished run no longer requires switching the module off and on again.
+            var look = Combat.crosshairBlock();
+            if (look != null && (lastDone == null || !look.getBlockPos().equals(lastDone))) {
+                step = IDLE; timer = 0; wait = 0; clicks = 0; safeDone = false; lastDone = null;
+            }
+            return;
+        }
         if (timer > 0) { timer--; return; }
 
         switch (step) {
@@ -172,6 +182,7 @@ public class AnchorMacro extends Module {
             }
             case FINISH -> {
                 restoreSlot();
+                lastDone = support != null ? support : anchor;
                 clicks = 0;
                 safeDone = false;
                 // One run per press unless Auto Repeat is on. The old code fell straight back to IDLE, which made a

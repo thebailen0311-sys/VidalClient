@@ -29,7 +29,7 @@ public final class HatFeature extends FeatureRenderer<PlayerEntityRenderState, P
     public void render(MatrixStack m, OrderedRenderCommandQueue queue, int light, PlayerEntityRenderState s, float yaw, float pitch) {
         var c = ModuleManager.cosmetics;
         var mc = MinecraftClient.getInstance();
-        if (c == null || !c.isEnabled() || c.hat.is("Off") || mc.player == null || s.id != mc.player.getId()) return;
+        if (c == null || c.preview || !c.isEnabled() || c.hat.is("Off") || mc.player == null || s.id != mc.player.getId()) return;
         m.push();
         getContextModel().getHead().applyTransform(m);
         Theme t = Themes.current();

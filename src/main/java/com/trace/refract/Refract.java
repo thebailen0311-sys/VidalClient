@@ -52,6 +52,7 @@ public class Refract implements ClientModInitializer {
                 if (mc.currentScreen == null) mc.setScreen(new ClickGuiScreen());
             }
             LiveTest.tick(mc);
+            com.trace.refract.update.Updater.maybeCheck();
             com.trace.refract.util.Rotations.endTick();
             long ts = System.nanoTime();
             WorldScanner.tick(mc);

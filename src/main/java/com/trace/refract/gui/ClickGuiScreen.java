@@ -99,7 +99,8 @@ public class ClickGuiScreen extends Screen {
 
     private enum HitType {
         CATEGORY, GENERAL, CARD, SWITCH, INFO, SEARCH, DRAG, GRID_AREA, DRAWER_AREA, DIM, CLOSE, MOD_TOGGLE,
-        BOOL, NUMBER, MODE_PREV, MODE_NEXT, MODE_SEG, BIND, BIND_HOLD, BIND_PLACE, THEME, BLOCK_SEARCH, BLOCK_ADD, BLOCK_COLOR, BLOCK_REMOVE
+        BOOL, NUMBER, MODE_PREV, MODE_NEXT, MODE_SEG, BIND, BIND_HOLD, BIND_PLACE, THEME, BLOCK_SEARCH, BLOCK_ADD, BLOCK_COLOR, BLOCK_REMOVE,
+        ACCOUNT_REFRESH, ACCOUNT_KEY
     }
 
     private record Hit(HitType type, float x, float y, float w, float h, Object a, Object b) {
@@ -298,8 +299,19 @@ public class ClickGuiScreen extends Screen {
         Gfx.glassBody(t, x, y, cw, ch, 18, 0.35f);
         // Player identity.
         Gfx.text("PLAYER", x + 14, y + 12, Gfx.SMALL - 1, Font.Weight.BOLD, Colors.withAlpha(t.accent(), 0xC0));
-        Gfx.text(Gfx.ellipsize(playerName(), cw - 28, Gfx.BODY + 5, Font.Weight.BOLD), x + 14, y + 21, Gfx.BODY + 5, Font.Weight.BOLD, t.text());
+        Gfx.text(Gfx.ellipsize(playerName(), cw - 68, Gfx.BODY + 5, Font.Weight.BOLD), x + 14, y + 21, Gfx.BODY + 5, Font.Weight.BOLD, t.text());
         Gfx.text("DonutSMP", x + 14, y + 39, Gfx.SMALL - 0.5f, Font.Weight.SEMIBOLD, t.textDim());
+        // Refresh and clipboard-key buttons: no need to leave the game or edit a config by hand.
+        float rcy = y + 18, rkx = x + cw - 19, kkx = x + cw - 41;
+        boolean rh = over(rkx - 9, rcy - 9, 18, 18), kh = over(kkx - 9, rcy - 9, 18, 18);
+        Gfx.circle(rkx, rcy, 9, rh ? Colors.withAlpha(t.accent(), 0x3C) : 0x1CFFFFFF);
+        Gfx.circle(kkx, rcy, 9, kh ? Colors.withAlpha(t.accent(), 0x3C) : 0x1CFFFFFF);
+        refreshIcon(rkx, rcy, rh ? t.text() : t.textDim());
+        keyIcon(kkx, rcy, kh ? t.text() : t.textDim());
+        hits.add(new Hit(HitType.ACCOUNT_REFRESH, rkx - 9, rcy - 9, 18, 18, null, null));
+        hits.add(new Hit(HitType.ACCOUNT_KEY, kkx - 9, rcy - 9, 18, 18, null, null));
+        if (rh) { dockTip = "Refresh stats"; dockTipX = rkx + 12; dockTipY = rcy; }
+        if (kh) { dockTip = "Use API key from clipboard"; dockTipX = kkx + 12; dockTipY = rcy; }
         float pillH = 20, pillY = y + ch - pillH - 10;
         String status = com.trace.refract.util.AccountStats.loading ? "loading…" : com.trace.refract.util.AccountStats.status;
         Gfx.round(x + 10, pillY, cw - 20, pillH, pillH / 2, 0x1AFFFFFF);
@@ -319,8 +331,12 @@ public class ClickGuiScreen extends Screen {
         avatarH = plateH - 20;
         avatarReady = true;
 
-        // Stats grid.
+        // Stats grid, with the K/D chip on the right of its heading.
         Gfx.text("DONUTSMP STATS", x + cw + 14, y + 6, Gfx.SMALL - 1, Font.Weight.BOLD, Colors.withAlpha(t.textDim(), 0xB0));
+        String kd = "K/D " + com.trace.refract.util.AccountStats.kd();
+        float kdw = Gfx.width(kd, Gfx.SMALL - 1, Font.Weight.BOLD);
+        Gfx.round(x + w - 14 - kdw - 8, y + 3, kdw + 8, 11, 5.5f, Colors.withAlpha(t.accent(), 0x22));
+        Gfx.text(kd, x + w - 14 - kdw - 4, y + 4.5f, Gfx.SMALL - 1, Font.Weight.BOLD, t.accent());
         String[][] tiles = {
                 {"Money", com.trace.refract.util.AccountStats.money},
                 {"Playtime", com.trace.refract.util.AccountStats.playtime},
@@ -332,7 +348,7 @@ public class ClickGuiScreen extends Screen {
                 {"Blocks broken", com.trace.refract.util.AccountStats.broken},
         };
         float tx = x + cw + 12, tw = w - cw - 12, gap = 8, gridY = y + 18;
-        float cellW = (tw - gap) / 2f, cellH = Math.max(36, (ch - 18 - 3 * gap) / 4f);
+        float cellW = (tw - gap) / 2f, cellH = Math.max(34, (ch - 32 - 3 * gap) / 4f);
         int[] dots = {t.accent(), t.accent2(), t.accent3(), Colors.lerp(t.accent(), 0xFFFFFFFF, 0.3f)};
         for (int i = 0; i < tiles.length; i++) {
             float cx = tx + (i % 2) * (cellW + gap), cy = gridY + (i / 2) * (cellH + gap);
@@ -344,6 +360,9 @@ public class ClickGuiScreen extends Screen {
             String v = tiles[i][1] == null || tiles[i][1].isBlank() ? "—" : tiles[i][1];
             Gfx.text(Gfx.ellipsize(v, cellW - 22, Gfx.BODY + 3, Font.Weight.BOLD), cx + 10, cy + cellH - 22, Gfx.BODY + 3, Font.Weight.BOLD, t.text());
         }
+        String market = "Market · " + com.trace.refract.util.MarketPrices.status();
+        Gfx.text(Gfx.ellipsize(market, tw - 8, Gfx.SMALL - 1, Font.Weight.SEMIBOLD), tx + 6, y + ch - 11, Gfx.SMALL - 1, Font.Weight.SEMIBOLD,
+                com.trace.refract.util.MarketPrices.entries() > 0 ? Colors.withAlpha(t.textDim(), 0xC0) : Colors.withAlpha(t.textDim(), 0x90));
         return y + ch + 10;
     }
 
@@ -356,6 +375,13 @@ public class ClickGuiScreen extends Screen {
         view.transformPosition(p);
         float ax = p.x, ay = p.y, aw = avatarW * scale, ah = avatarH * scale;
         float spin = (float) Math.sin(Time.seconds() * 0.9) * 170f;
+        // The preview is a clean portrait: capes, elytra and hats are suppressed and the held items are hidden only
+        // for this synchronous render call, then put straight back.
+        var main = player.getMainHandStack();
+        var off = player.getOffHandStack();
+        player.setStackInHand(net.minecraft.util.Hand.MAIN_HAND, net.minecraft.item.ItemStack.EMPTY);
+        player.setStackInHand(net.minecraft.util.Hand.OFF_HAND, net.minecraft.item.ItemStack.EMPTY);
+        com.trace.refract.module.modules.Cosmetics.preview = true;
         try {
             // A taller clip box than the character needs: drawEntity scissors to this box, so any spill is what cut
             // the top of the head off before. Size stays under the box height for the same reason.
@@ -363,12 +389,18 @@ public class ClickGuiScreen extends Screen {
                     (int) (ax - 6), (int) (ay - 18), (int) (ax + aw + 6), (int) (ay + ah + 4),
                     (int) Math.min(ah * 0.54f, aw * 0.92f), 0f,
                     ax + aw / 2 + spin, ay + ah * 0.55f, player);
-        } catch (Throwable ignored) { }
+        } catch (Throwable ignored) {
+        } finally {
+            com.trace.refract.module.modules.Cosmetics.preview = false;
+            player.setStackInHand(net.minecraft.util.Hand.MAIN_HAND, main);
+            player.setStackInHand(net.minecraft.util.Hand.OFF_HAND, off);
+        }
     }
 
     // ------------------------------------------------------------------ dock
 
     private String dockTip;
+    private final Map<String, Anim> dockHover = new HashMap<>();
     private float listTop;
     private int scrollToSel = 4;
     private float dockTipX, dockTipY;
@@ -427,11 +459,16 @@ public class ClickGuiScreen extends Screen {
             Gfx.round(x, y, size, size, size / 2, 0x1CFFFFFF);
         }
         int col = sel ? 0xFFFFFFFF : Colors.lerp(t.textDim(), t.text(), hov ? 0.7f : 0f);
+        Anim ha = dockHover.computeIfAbsent(label, k -> new Anim(0, 12f));
+        ha.to(hov ? 1 : 0).update(animated() ? Time.dt() : 1f);
+        float hk = 1f + 0.10f * Anim.easeOutCubic(ha.value);
+        if (hk > 1.005f) Gfx.pushPlace(cx, cy, cx, cy, hk);
         if (cat != null) icon(cat, cx, cy, col, t);
         else if ("Account".equals(label)) personIcon(cx, cy, col);
         else if ("Settings".equals(label)) gearIcon(cx, cy, col);
         else if ("Theme".equals(label)) paletteIcon(t, cx, cy, col);
         else hudIcon(cx, cy, col);
+        if (hk > 1.005f) Gfx.popPlace();
         if (count > 0) {
             String n = String.valueOf(count);
             float bw = Math.max(9, Gfx.width(n, Gfx.SMALL - 1, Font.Weight.BOLD) + 5);
@@ -523,7 +560,10 @@ public class ClickGuiScreen extends Screen {
         floating(t, x, y, w, h, 18, 0.5f);
         boolean searching = !search.isEmpty();
         List<Module> mods = visibleModules();
-        if (panel == Panel.ACCOUNT) com.trace.refract.util.AccountStats.refreshIfStale();
+        if (panel == Panel.ACCOUNT) {
+            com.trace.refract.util.AccountStats.refreshIfStale();
+            com.trace.refract.util.MarketPrices.maybeSync();
+        }
         String title = searching ? "Search" : panel == Panel.ACCOUNT ? "Account" : panel == Panel.SETTINGS ? "Settings" : panel == Panel.THEME ? "Theme" : category.label;
         String sub = searching ? mods.size() + (mods.size() == 1 ? " result" : " results")
                 : panel == Panel.ACCOUNT ? com.trace.refract.util.AccountStats.status
@@ -839,6 +879,22 @@ public class ClickGuiScreen extends Screen {
         Gfx.circle(cx - 0.7f, cy - 0.8f, 0.45f, 0xFFFFFFFF);
     }
 
+    /** Circular refresh arrow for the account card. */
+    private static void refreshIcon(float cx, float cy, int col) {
+        Gfx.ring(cx, cy, 4.1f, 1, col);
+        Gfx.stroke(cx + 2.2f, cy - 4.2f, cx + 4.4f, cy - 4.6f, 1.3f, col);
+        Gfx.stroke(cx + 4.4f, cy - 4.6f, cx + 3.6f, cy - 2.4f, 1.3f, col);
+        Gfx.circle(cx, cy, 1.2f, Colors.withAlpha(col, 0xB0));
+    }
+
+    /** Small key glyph for "use the key on my clipboard". */
+    private static void keyIcon(float cx, float cy, int col) {
+        Gfx.ring(cx - 2.2f, cy - 1.4f, 2.6f, 1, col);
+        Gfx.stroke(cx - 0.2f, cy + 0.1f, cx + 4.6f, cy + 3.2f, 1.4f, col);
+        Gfx.stroke(cx + 2.4f, cy + 1.9f, cx + 3.4f, cy + 0.4f, 1.4f, col);
+        Gfx.stroke(cx + 3.6f, cy + 2.6f, cx + 4.6f, cy + 1.1f, 1.4f, col);
+    }
+
     /** Painter's palette: rounded body, thumb hole, three theme swatches and a brush stroke. */
     private static void paletteIcon(Theme t, float cx, float cy, int col) {
         Gfx.round(cx - 6f, cy - 5.4f, 12f, 10.8f, 5.2f, Colors.withAlpha(col, 0x26));
@@ -1149,7 +1205,7 @@ public class ClickGuiScreen extends Screen {
         boolean armed = listening != null || listeningPlace;
         Hit hit = hitAt(x, y, HitType.CATEGORY, HitType.GENERAL, HitType.SWITCH, HitType.CARD, HitType.SEARCH, HitType.DIM, HitType.CLOSE,
                 HitType.MOD_TOGGLE, HitType.BOOL, HitType.NUMBER, HitType.MODE_PREV, HitType.MODE_NEXT, HitType.MODE_SEG, HitType.BIND,
-                HitType.BIND_HOLD, HitType.BIND_PLACE,
+                HitType.BIND_HOLD, HitType.BIND_PLACE, HitType.ACCOUNT_REFRESH, HitType.ACCOUNT_KEY,
                 HitType.THEME, HitType.BLOCK_SEARCH, HitType.BLOCK_ADD, HitType.BLOCK_COLOR, HitType.BLOCK_REMOVE, HitType.DRAWER_AREA, HitType.DRAG);
         if (armed) {
             boolean control = hit != null && (hit.type() == HitType.BIND || hit.type() == HitType.BIND_HOLD
@@ -1187,6 +1243,11 @@ public class ClickGuiScreen extends Screen {
             case DIM, CLOSE -> { Sfx.click(); closePanel(); }
             case MOD_TOGGLE -> toggleWithSound((Module) hit.a());
             case THEME -> { Sfx.click(); ModuleManager.clickGui.theme.set((String) hit.a()); }
+            case ACCOUNT_REFRESH -> { Sfx.click(); com.trace.refract.util.AccountStats.refreshNow(); }
+            case ACCOUNT_KEY -> {
+                Sfx.click();
+                Refract.chat("§7" + com.trace.refract.util.AccountStats.useClipboardKey());
+            }
             case BOOL -> { BoolSetting b = (BoolSetting) hit.a(); b.toggle(); Sfx.toggle(b.on()); }
             case BIND_HOLD -> { Module mod = (Module) hit.a(); mod.hold = !mod.hold; Sfx.toggle(mod.hold); }
             case NUMBER -> {

@@ -78,8 +78,9 @@ public class AutoTotem extends Module {
             timer = 2; // nothing to swap yet; check again shortly
         }
 
-        // Double hand only takes the main hand when it is free: never yank a weapon out of your hand mid-fight.
-        if (doubleHand.on() && !Combat.holdingWeapon() && !mc.player.getMainHandStack().isOf(Items.TOTEM_OF_UNDYING)) {
+        // Double hand is a last-resort shield: only at low health, only with a free hand, and never over a weapon.
+        if (doubleHand.on() && low && mc.currentScreen == null && !Combat.holdingWeapon()
+                && !mc.player.getMainHandStack().isOf(Items.TOTEM_OF_UNDYING)) {
             int slot = Combat.find(Items.TOTEM_OF_UNDYING);
             if (slot >= 0) {
                 if (slot < 9) mc.player.getInventory().setSelectedSlot(slot);

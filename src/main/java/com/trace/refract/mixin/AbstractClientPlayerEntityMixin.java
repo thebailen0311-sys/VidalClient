@@ -16,7 +16,7 @@ public abstract class AbstractClientPlayerEntityMixin {
     @Inject(method = "getSkin", at = @At("RETURN"), cancellable = true)
     private void refract$cape(CallbackInfoReturnable<SkinTextures> cir) {
         var c = ModuleManager.cosmetics;
-        if (c == null || !c.isEnabled() || (Object) this != MinecraftClient.getInstance().player) return;
+        if (c == null || c.preview || !c.isEnabled() || (Object) this != MinecraftClient.getInstance().player) return;
         if (!c.cape.on() && !c.elytra.on()) return;
         SkinTextures s = cir.getReturnValue();
         if (s == null) return;

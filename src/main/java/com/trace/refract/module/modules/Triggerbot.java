@@ -59,6 +59,9 @@ public class Triggerbot extends Module {
 
     @Override public void onTick() {
         if (mc.player == null || mc.world == null) return;
+        if (mc.currentScreen != null) { releaseJump(); return; }
+        // Attacking while using an item (eating, blocking, potions) is not an input vanilla produces.
+        if (mc.player.isUsingItem()) return;
         if (jumped && ++jumpTicks > 2) releaseJump();
 
         if (holdOnly.on() && !Combat.holdingAttack()) { wait = 0; return; }

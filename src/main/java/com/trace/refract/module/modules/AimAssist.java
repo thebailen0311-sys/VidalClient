@@ -34,6 +34,7 @@ public class AimAssist extends Module {
 
     @Override public void onTick() {
         if (mc.player == null || mc.world == null) return;
+        if (mc.currentScreen != null) return;
         if (holdOnly.on() && !Combat.holdingAttack()) return;
         if (weaponOnly.on() && !Combat.holdingWeapon()) return;
 

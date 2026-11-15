@@ -40,11 +40,12 @@ public final class Updater {
     private static final String API = "https://api.github.com/repos/" + REPO + "/releases/latest";
     private static final String RAW = "https://raw.githubusercontent.com/" + REPO + "/main/";
     private static final String MANIFEST = RAW + "update.json";
-    private static final String USER_AGENT = "Vanta-Updater";
+    private static final String USER_AGENT = "Vidal-Updater";
 
     private static volatile String status = "not checked";
     private static volatile String latestVersion = "";
     private static volatile String source = "";
+    private static volatile long lastAttempt = System.currentTimeMillis();
 
     private Updater() {}
 
@@ -73,9 +74,23 @@ public final class Updater {
         // A dev client runs from build/classes; writing a jar into run/mods would collide with the classpath copy.
         if (runningJar() == null) { status = "dev build - updates off"; return; }
         pruneOlder();
+        lastAttempt = System.currentTimeMillis();
         Thread t = new Thread(() -> {
             try { check(); } catch (Throwable e) { status = "check failed: " + e; Refract.LOG.debug("update check failed", e); }
-        }, "vanta-updater");
+        }, "vidal-updater");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    /** Retries a failed or missed check every half hour, in case the network was down at launch. Cheap to call. */
+    public static void maybeCheck() {
+        if (System.getProperty("refract.noupdate") != null || runningJar() == null) return;
+        long now = System.currentTimeMillis();
+        if (now - lastAttempt < 1_800_000L) return;
+        lastAttempt = now;
+        Thread t = new Thread(() -> {
+            try { check(); } catch (Throwable e) { status = "check failed: " + e; }
+        }, "vidal-updater-retry");
         t.setDaemon(true);
         t.start();
     }
@@ -327,7 +342,7 @@ public final class Updater {
     }
 
     /**
-     * Deletes superseded Vanta jars in {@code mods/} so only one version loads. The jar in use stays (Windows locks
+     * Deletes superseded Vidal jars in {@code mods/} so only one version loads. The jar in use stays (Windows locks
      * it); the launch after this one removes it.
      */
     public static void pruneOlder() {

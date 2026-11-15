@@ -19,6 +19,7 @@ import java.nio.file.Path;
 public final class Config {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final Path FILE = FabricLoader.getInstance().getConfigDir().resolve("refract.json");
+    private static final Path BACKUP = FabricLoader.getInstance().getConfigDir().resolve("refract.json.bak");
 
     private Config() {}
 
@@ -40,16 +41,38 @@ public final class Config {
             root.add("gui", ClickGuiScreen.saveState());
             root.add("hud", com.trace.refract.hud.HudLayout.save());
             Files.createDirectories(FILE.getParent());
-            Files.writeString(FILE, GSON.toJson(root));
+            String json = GSON.toJson(root);
+            // Write beside the real file, keep the last good copy, then swap atomically. A crash or a closed laptop
+            // mid-save can no longer leave a half-written refract.json behind.
+            Path tmp = FILE.resolveSibling("refract.json.tmp");
+            Files.writeString(tmp, json);
+            if (Files.exists(FILE)) Files.copy(FILE, BACKUP, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            try {
+                Files.move(tmp, FILE, java.nio.file.StandardCopyOption.REPLACE_EXISTING, java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+            } catch (java.nio.file.AtomicMoveNotSupportedException e) {
+                Files.move(tmp, FILE, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            }
         } catch (Exception e) {
-            Refract.LOG.error("Could not save Refract config", e);
+            Refract.LOG.error("Could not save Vidal config", e);
         }
     }
 
     public static void load() {
-        if (!Files.exists(FILE)) return;
+        if (!Files.exists(FILE) && !Files.exists(BACKUP)) return;
+        JsonObject root;
         try {
-            JsonObject root = JsonParser.parseString(Files.readString(FILE)).getAsJsonObject();
+            root = JsonParser.parseString(Files.readString(FILE)).getAsJsonObject();
+        } catch (Exception primary) {
+            Refract.LOG.warn("refract.json could not be read ({}), trying the backup", primary.toString());
+            try {
+                root = JsonParser.parseString(Files.readString(BACKUP)).getAsJsonObject();
+                Refract.chat("§eConfig was damaged; the last backup was loaded.");
+            } catch (Exception backup) {
+                Refract.LOG.error("Could not load Vidal config or its backup", backup);
+                return;
+            }
+        }
+        try {
             if (root.has("modules")) {
                 JsonObject mods = root.getAsJsonObject("modules");
                 for (Module m : ModuleManager.MODULES) {
@@ -61,7 +84,9 @@ public final class Config {
                         JsonObject s = o.getAsJsonObject("settings");
                         for (Setting<?> set : m.settings) {
                             JsonElement e = s.get(set.name);
-                            if (e != null) set.load(e);
+                            if (e == null) continue;
+                            // One setting written by an older build must not abort the rest of the config.
+                            try { set.load(e); } catch (Exception bad) { Refract.LOG.warn("Skipping bad setting {}.{}: {}", m.name, set.name, bad.toString()); }
                         }
                     }
                     // Freecam and Zoom always start off; the GUI module is never "on".

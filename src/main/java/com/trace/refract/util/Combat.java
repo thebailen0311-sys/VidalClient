@@ -265,6 +265,16 @@ public final class Combat {
         Vec3d look = com.trace.refract.util.Rotations.active()
                 ? dirFrom(Rotations.currentYaw(), Rotations.currentPitch())
                 : mc.player.getRotationVec(1f);
+        return rayBlock(eye, look, reach);
+    }
+
+    /** The block the camera itself is looking at, ignoring any silent rotation a module is driving. */
+    public static BlockHitResult cameraBlock(double reach) {
+        if (mc.player == null || mc.world == null) return null;
+        return rayBlock(mc.player.getEyePos(), mc.player.getRotationVec(1f), reach);
+    }
+
+    private static BlockHitResult rayBlock(Vec3d eye, Vec3d look, double reach) {
         Vec3d end = eye.add(look.multiply(reach));
         HitResult hit = mc.world.raycast(new net.minecraft.world.RaycastContext(eye, end,
                 net.minecraft.world.RaycastContext.ShapeType.OUTLINE,

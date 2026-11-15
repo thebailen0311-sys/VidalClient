@@ -262,29 +262,27 @@ public final class LiveTest {
                 if (ticks == 200) mc.options.attackKey.setPressed(false);
             }
             case "crystal" -> {
-                if (ticks == 110) {
-                    for (int i = 0; i < 9; i++) {
-                        if (mc.player.getInventory().getStack(i).getItem() == net.minecraft.item.Items.OBSIDIAN) {
-                            mc.player.getInventory().setSelectedSlot(i);
-                            log("selected obsidian in slot " + i);
-                            break;
-                        }
-                    }
+                if (ticks == 20) cmd(mc, "gamemode creative");
+                if (ticks == 30) {
+                    // One guaranteed, reachable support two blocks ahead; old test blocks around it are cleared.
+                    cmd(mc, "setblock ~ ~-1 ~2 minecraft:stone");
+                    cmd(mc, "fill ~ ~ ~2 ~ ~3 ~2 minecraft:air replace");
+                    log("arena reset");
                 }
                 if (ticks == 60) {
                     enable("auto crystal", true);
                     // Look at the floor ~2 blocks ahead, not straight down into the player's own feet block.
                     mc.player.setYaw(0f);
-                    mc.player.setPitch(35f);
+                    mc.player.setPitch(38f);
                     log("before: obsidian=" + countBlock(mc, net.minecraft.block.Blocks.OBSIDIAN)
                             + " crystals=" + countCrystals(mc));
-
                     log("auto crystal on, looking down");
                 }
                 if (ticks > 60 && ticks % 20 == 0) {
                     log("t=" + ticks + " obsidian=" + countBlock(mc, net.minecraft.block.Blocks.OBSIDIAN)
                             + " crystals=" + countCrystals(mc)
-                            + " held=" + mc.player.getMainHandStack().getItem());
+                            + " held=" + mc.player.getMainHandStack().getItem()
+                            + " state=" + ModuleManager.autoCrystal.debugState());
                 }
                 if (ticks == 200) enable("auto crystal", false);
             }

@@ -260,10 +260,20 @@ public final class Gfx {
 
     private static Font.Atlas atlas(float size, Font.Weight w) { return Font.atlas(w, Math.round(size * s)); }
 
+    private record WidthKey(String text, int px, int weight) {}
+    private static final java.util.Map<WidthKey, Float> WIDTH_CACHE = new java.util.HashMap<>();
+
     public static float width(String str, float size, Font.Weight w) {
-        Font.Atlas a = atlas(size, w);
+        int px = Math.round(size * s);
+        WidthKey key = new WidthKey(str, px, w.ordinal());
+        Float cached = WIDTH_CACHE.get(key);
+        if (cached != null) return cached / s;
+        Font.Atlas a = Font.atlas(w, px);
         float sum = 0;
         for (int i = 0; i < str.length(); i++) sum += a.advance(str.charAt(i));
+        // Cache the raw pixel advance, not GUI units: the same pixel atlas can be used at another GUI scale.
+        if (WIDTH_CACHE.size() > 6144) WIDTH_CACHE.clear();
+        WIDTH_CACHE.put(key, sum);
         return sum / s;
     }
 
