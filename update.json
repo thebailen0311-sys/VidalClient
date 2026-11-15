@@ -1,6 +1,6 @@
 {
-  "version": "1.0.13",
-  "notes": "Anchor Macro now actually detonates in the overworld: it charges with glowstone, swaps off glowstone and right-clicks the anchor, then waits for the pop, restores your slot and stops until you press it again (Auto Repeat is a setting). AutoCrystal defaults to instant actions, has Require Look so it never works a spot behind your camera, and faster item swaps. New Account page with a spinning 3D player preview and DonutSMP stats tiles.",
-  "jar": "dist/vanta-1.0.13.jar",
-  "sha256": "ca57e84b8083048b45d14a0e4ac89f3eee25d0961c0092abbbc378cee27aa0a0"
+  "version": "1.0.14",
+  "notes": "The client is now Vidal, with a new V icon and wordmark. The window uses a fixed layout that scales to fit your GUI scale instead of overlapping and clipping, the dock icons are redrawn, and the Account page has a taller showcase plate so the spinning character no longer clips at the head or feet.",
+  "jar": "dist/vanta-1.0.14.jar",
+  "sha256": "44efb48b38d6981bcd1719233bcb1e3ccc1c7e7671eef8e454c8090f24ac1d86"
 }

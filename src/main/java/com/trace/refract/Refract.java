@@ -27,7 +27,7 @@ import org.slf4j.LoggerFactory;
 
 public class Refract implements ClientModInitializer {
     public static final String ID = "refract";
-    public static final String NAME = "Vanta";
+    public static final String NAME = "Vidal";
     public static final Logger LOG = LoggerFactory.getLogger(NAME);
 
     public static KeyBinding guiKey;
@@ -88,7 +88,7 @@ public class Refract implements ClientModInitializer {
         HudElementRegistry.addLast(Identifier.of(ID, "hud"), RefractHud::render);
         ClientLifecycleEvents.CLIENT_STOPPING.register(mc -> Config.save());
         com.trace.refract.update.Updater.init();
-        LOG.info("Refract loaded - press Right Shift for the GUI");
+        LOG.info("Vidal loaded - press Right Shift for the GUI");
     }
 
     /** Gradient "Refract" prefix for chat lines. */

@@ -515,16 +515,26 @@ public final class Gfx {
     }
 
     /**
-     * The Vanta mark: a faceted prism gem. An accent-to-second-accent diamond with a darker cut through its lower
-     * half, a bright crown facet and a white glint, on a soft accent glow. Vector shapes only, sharp at any size.
+     * The Vidal mark: a faceted V cut from glass, accent on the left arm and second accent on the right, a bright
+     * inner highlight and a spark at the point, on a soft glow. Vector shapes only, sharp at any size.
      */
     public static void logo(Theme t, float x, float y, float size) {
         float cx = x + size / 2, cy = y + size / 2, r = size / 2;
-        glow(cx, cy, size * 0.95f, Colors.withAlpha(t.accent(), 0x55));
-        diamond(cx, cy, r, t.accent(), t.accent2());
-        diamond(cx, cy + r * 0.28f, r * 0.62f, Colors.withAlpha(Colors.shade(t.accent2(), -0.35f), 0xE0), Colors.withAlpha(Colors.shade(t.accent(), -0.45f), 0xE0));
-        diamond(cx, cy - r * 0.36f, r * 0.36f, 0xF0FFFFFF, Colors.withAlpha(t.accent3(), 0xD0));
-        circle(cx - r * 0.18f, cy - r * 0.42f, Math.max(0.6f, r * 0.08f), 0xFFFFFFFF);
+        glow(cx, cy, size * 1.05f, Colors.withAlpha(t.accent(), 0x55));
+        // Soft dark glass seat so the mark reads on light and dark themes.
+        round(cx - r, cy - r, size, size, r * 0.34f, 0x38000000);
+        outline(cx - r, cy - r, size, size, r * 0.34f, 1, Colors.withAlpha(t.accent(), 0x40), Colors.withAlpha(t.accent2(), 0x30));
+        float top = cy - r * 0.52f, bot = cy + r * 0.56f, half = r * 0.48f;
+        float thick = Math.max(1.6f, size * 0.17f);
+        // Two bevels per arm: a solid outer edge and a lighter inner facet.
+        stroke(cx - half, top, cx, bot, thick, t.accent());
+        stroke(cx + half, top, cx, bot, thick, t.accent2());
+        stroke(cx - half + thick * 0.28f, top + thick * 0.5f, cx + thick * 0.12f, bot - thick * 0.45f, Math.max(0.8f, thick * 0.3f),
+                Colors.withAlpha(0xFFFFFFFF, 0xB0));
+        stroke(cx + half - thick * 0.28f, top + thick * 0.5f, cx - thick * 0.12f, bot - thick * 0.45f, Math.max(0.8f, thick * 0.3f),
+                Colors.withAlpha(0xFFFFFFFF, 0x60));
+        circle(cx, top - r * 0.02f, Math.max(0.9f, size * 0.055f), 0xFFFFFFFF);
+        circle(cx, bot + r * 0.02f, Math.max(0.8f, size * 0.045f), Colors.withAlpha(t.accent3(), 0xFF));
     }
 
     /** A rounded square turned 45 degrees (a diamond) of half-diagonal {@code r}, gradient left to right. */

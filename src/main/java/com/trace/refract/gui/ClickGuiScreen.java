@@ -47,7 +47,7 @@ import java.util.*;
  * rebuilt each frame and recorded as hit regions, so input always matches what is drawn.
  */
 public class ClickGuiScreen extends Screen {
-    private static final String VERSION = "v2.4.0";
+    private static final String VERSION = "v3.0.0";
     private static final float R = 12, PAD = 6, CARD_GAP = 6, ROW = 24, ROW_NUM = 32;
     private static final float OPEN_S = 0.26f, CLOSE_S = 0.17f, DRAWER_S = 0.30f, STAGGER_S = 0.035f, ENTER_S = 0.32f;
     private static final DateTimeFormatter CLOCK = DateTimeFormatter.ofPattern("HH:mm");
@@ -199,7 +199,10 @@ public class ClickGuiScreen extends Screen {
         if (closing && openT <= 0f) { finishClose(); return; }
         Theme t = Themes.current();
         float e = openEase();
-        scale = 0.96f + 0.04f * e;
+        // Fixed virtual layout, scaled to fit the window. Without this the window shrank with the screen while its
+        // contents kept their size, which overlapped the dock rows and clipped the account card.
+        float fit = Math.min(1f, Math.min((width - 16f) / 600f, (height - 16f) / 360f));
+        scale = fit * (0.965f + 0.035f * e);
         // 3D tilt: the window leans toward the mouse (a gentle shear that eases), like a pane of glass turning to face you.
         boolean tiltOn = ModuleManager.clickGui.tilt.on() && animated();
         tiltX.to(tiltOn ? MathHelper.clamp((mouseX - width / 2f) / (width / 2f), -1, 1) : 0).update(dt);
@@ -212,13 +215,15 @@ public class ClickGuiScreen extends Screen {
         mx = lm[0];
         my = lm[1];
 
-        winW = Math.min(640, width - 16);
-        winH = Math.min(390, height - 16);
+        winW = 600;
+        winH = 360;
+        float roomX = Math.max(0, (width / fit - winW) / 2f), roomY = Math.max(0, (height / fit - winH) / 2f);
         if (dragging) { offX = mx - dragDX - (width - winW) / 2f; offY = my - dragDY - (height - winH) / 2f; }
-        offX = MathHelper.clamp(offX, -(width - winW) / 2f, (width - winW) / 2f);
-        offY = MathHelper.clamp(offY, -(height - winH) / 2f, (height - winH) / 2f);
+        offX = MathHelper.clamp(offX, -roomX, roomX);
+        offY = MathHelper.clamp(offY, -roomY, roomY);
+        // The view scales around the middle of the screen, so the window is centred in un-scaled coordinates too.
         winX = Math.round((width - winW) / 2f + offX);
-        winY = (height - winH) / 2f + offY + (1 - e) * 10;
+        winY = (height - winH) / 2f + offY + (1 - e) * 14;
         if (slider != null) slider.setFrac((mx - sliderX) / sliderW);
 
         // Drawer: slide in when a panel is chosen, keep drawing the old one while it slides out.
@@ -242,7 +247,7 @@ public class ClickGuiScreen extends Screen {
 
         dockTip = null;
         drawAmbient(t);
-        float dockW = 46, gap = 8, headH = 30;
+        float dockW = 50, gap = 8, headH = 31;
         drawDock(t, dt, winX, winY, dockW, winH);
         float cx = winX + dockW + gap, cw = winX + winW - cx;
         drawHeader(t, dt, cx, winY, cw, headH);
@@ -285,24 +290,37 @@ public class ClickGuiScreen extends Screen {
     private float avatarX, avatarY, avatarW, avatarH;
     private boolean avatarReady;
 
-    /** Stats card: a live 3D player preview on the left, DonutSMP numbers on the right. */
+    /** Stats card: a live 3D player on a showcase plate on the left, DonutSMP numbers on the right. */
     private float accountBody(Theme t, float x, float y, float w, float ly, float lh) {
-        var a = com.trace.refract.util.AccountStats.class;
-        float cw = Math.min(176, w * 0.36f), ch = Math.max(150, Math.min(212, lh - 16));
-        Gfx.shadow(x, y, cw, ch, 16, 12, 0x42000000);
-        Gfx.glassBody(t, x, y, cw, ch, 16, 0.35f);
-        Gfx.text(Gfx.ellipsize(playerName(), cw - 20, Gfx.BODY + 1, Font.Weight.BOLD), x + 10, y + 9, Gfx.BODY + 1, Font.Weight.BOLD, t.text());
-        Gfx.text("DonutSMP", x + 10, y + 22, Gfx.SMALL, t.textDim());
+        float cw = Math.min(224, Math.max(194, w * 0.35f));
+        float ch = Math.max(190, lh - 10);
+        Gfx.shadow(x, y, cw, ch, 18, 14, 0x48000000);
+        Gfx.glassBody(t, x, y, cw, ch, 18, 0.35f);
+        // Player identity.
+        Gfx.text("PLAYER", x + 14, y + 12, Gfx.SMALL - 1, Font.Weight.BOLD, Colors.withAlpha(t.accent(), 0xC0));
+        Gfx.text(Gfx.ellipsize(playerName(), cw - 28, Gfx.BODY + 5, Font.Weight.BOLD), x + 14, y + 21, Gfx.BODY + 5, Font.Weight.BOLD, t.text());
+        Gfx.text("DonutSMP", x + 14, y + 39, Gfx.SMALL - 0.5f, Font.Weight.SEMIBOLD, t.textDim());
+        float pillH = 20, pillY = y + ch - pillH - 10;
         String status = com.trace.refract.util.AccountStats.loading ? "loading…" : com.trace.refract.util.AccountStats.status;
-        Gfx.round(x + 8, y + ch - 27, cw - 16, 19, 9.5f, 0x1AFFFFFF);
-        Gfx.text(Gfx.ellipsize(status, cw - 26, Gfx.SMALL - 0.5f, Font.Weight.SEMIBOLD), x + 13, y + ch - 22.5f, Gfx.SMALL - 0.5f, Font.Weight.SEMIBOLD,
-                com.trace.refract.util.AccountStats.status.startsWith("live") ? 0xFF5CFFB0 : t.accent());
-        avatarX = x + 8;
-        avatarY = y + 34;
-        avatarW = cw - 16;
-        avatarH = ch - 66;
+        Gfx.round(x + 10, pillY, cw - 20, pillH, pillH / 2, 0x1AFFFFFF);
+        Gfx.outline(x + 10, pillY, cw - 20, pillH, pillH / 2, 1, 0x18FFFFFF, 0x08FFFFFF);
+        boolean live = com.trace.refract.util.AccountStats.status.startsWith("live");
+        Gfx.circle(x + 19, pillY + pillH / 2, 2.2f, live ? 0xFF5CFFB0 : Colors.withAlpha(t.accent(), 0xE0));
+        Gfx.text(Gfx.ellipsize(status, cw - 46, Gfx.SMALL - 0.5f, Font.Weight.SEMIBOLD), x + 25, pillY + 6, Gfx.SMALL - 0.5f, Font.Weight.SEMIBOLD, live ? 0xFF5CFFB0 : t.textDim());
+        // Showcase plate behind the character, with room above the head and below the feet.
+        float plateX = x + 10, plateY = y + 54, plateW = cw - 20, plateH = pillY - plateY - 9;
+        Gfx.roundGradient(plateX, plateY, plateW, plateH, 16, 0x1EFFFFFF, 0x08FFFFFF);
+        Gfx.outline(plateX, plateY, plateW, plateH, 16, 1, Colors.withAlpha(t.accent(), 0x38), 0x10FFFFFF);
+        Gfx.glow(plateX + plateW / 2, plateY + plateH * 0.6f, plateW * 0.55f, Colors.withAlpha(t.accent(), 0x24));
+        Gfx.hline(plateX + 12, plateY + plateH - 14, plateW - 24, 1, Colors.withAlpha(t.accent(), 0x20));
+        avatarX = plateX + 4;
+        avatarY = plateY + 8;
+        avatarW = plateW - 8;
+        avatarH = plateH - 20;
         avatarReady = true;
 
+        // Stats grid.
+        Gfx.text("DONUTSMP STATS", x + cw + 14, y + 6, Gfx.SMALL - 1, Font.Weight.BOLD, Colors.withAlpha(t.textDim(), 0xB0));
         String[][] tiles = {
                 {"Money", com.trace.refract.util.AccountStats.money},
                 {"Playtime", com.trace.refract.util.AccountStats.playtime},
@@ -313,17 +331,20 @@ public class ClickGuiScreen extends Screen {
                 {"Blocks placed", com.trace.refract.util.AccountStats.placed},
                 {"Blocks broken", com.trace.refract.util.AccountStats.broken},
         };
-        float tx = x + cw + 10, tw = w - cw - 10, gap = 7;
-        float cellW = (tw - gap) / 2f, cellH = Math.max(32, Math.min(44, (lh - 18) / 4f - gap));
+        float tx = x + cw + 12, tw = w - cw - 12, gap = 8, gridY = y + 18;
+        float cellW = (tw - gap) / 2f, cellH = Math.max(36, (ch - 18 - 3 * gap) / 4f);
+        int[] dots = {t.accent(), t.accent2(), t.accent3(), Colors.lerp(t.accent(), 0xFFFFFFFF, 0.3f)};
         for (int i = 0; i < tiles.length; i++) {
-            float cx = tx + (i % 2) * (cellW + gap), cy = y + (i / 2) * (cellH + gap);
-            Gfx.round(cx, cy, cellW, cellH, 12, 0x16FFFFFF);
+            float cx = tx + (i % 2) * (cellW + gap), cy = gridY + (i / 2) * (cellH + gap);
+            boolean hov = over(cx, cy, cellW, cellH);
+            Gfx.round(cx, cy, cellW, cellH, 12, hov ? 0x1EFFFFFF : 0x14FFFFFF);
             Gfx.outline(cx, cy, cellW, cellH, 12, 1, 0x18FFFFFF, 0x08FFFFFF);
-            Gfx.text(tiles[i][0], cx + 10, cy + 7, Gfx.SMALL - 0.5f, Font.Weight.SEMIBOLD, t.textDim());
+            Gfx.round(cx + 1.5f, cy + cellH * 0.3f, 2.5f, cellH * 0.4f, 1.25f, dots[i % dots.length]);
+            Gfx.text(Gfx.ellipsize(tiles[i][0], cellW - 24, Gfx.SMALL - 0.5f, Font.Weight.SEMIBOLD), cx + 10, cy + 8, Gfx.SMALL - 0.5f, Font.Weight.SEMIBOLD, t.textDim());
             String v = tiles[i][1] == null || tiles[i][1].isBlank() ? "—" : tiles[i][1];
-            Gfx.text(Gfx.ellipsize(v, cellW - 20, Gfx.BODY + 3, Font.Weight.BOLD), cx + 10, cy + 19, Gfx.BODY + 3, Font.Weight.BOLD, t.text());
+            Gfx.text(Gfx.ellipsize(v, cellW - 22, Gfx.BODY + 3, Font.Weight.BOLD), cx + 10, cy + cellH - 22, Gfx.BODY + 3, Font.Weight.BOLD, t.text());
         }
-        return y + Math.max(ch, 4 * cellH + 3 * gap) + 8;
+        return y + ch + 10;
     }
 
     /** The spinning player, drawn after the custom GUI pass so the vanilla entity renderer keeps its own state. */
@@ -334,11 +355,14 @@ public class ClickGuiScreen extends Screen {
         org.joml.Vector2f p = new org.joml.Vector2f(avatarX, avatarY);
         view.transformPosition(p);
         float ax = p.x, ay = p.y, aw = avatarW * scale, ah = avatarH * scale;
-        float spin = (float) Math.sin(Time.seconds() * 0.9) * 150f;
+        float spin = (float) Math.sin(Time.seconds() * 0.9) * 170f;
         try {
+            // A taller clip box than the character needs: drawEntity scissors to this box, so any spill is what cut
+            // the top of the head off before. Size stays under the box height for the same reason.
             net.minecraft.client.gui.screen.ingame.InventoryScreen.drawEntity(ctx,
-                    (int) ax, (int) ay, (int) (ax + aw), (int) (ay + ah), (int) (ah * 0.62f), 0f,
-                    ax + aw / 2 + spin, ay + ah / 2, player);
+                    (int) (ax - 6), (int) (ay - 18), (int) (ax + aw + 6), (int) (ay + ah + 4),
+                    (int) Math.min(ah * 0.54f, aw * 0.92f), 0f,
+                    ax + aw / 2 + spin, ay + ah * 0.55f, player);
         } catch (Throwable ignored) { }
     }
 
@@ -362,27 +386,28 @@ public class ClickGuiScreen extends Screen {
      * bubble, hover shows its name), and Settings, Theme and the HUD editor at the bottom.
      */
     private void drawDock(Theme t, float dt, float x, float y, float w, float h) {
-        floating(t, x, y, w, h, Math.min(w / 2, 22), 0.2f);
-        Gfx.logo(t, x + w / 2 - 10, y + 12, 20);
-        hits.add(new Hit(HitType.DRAG, x, y, w, 40, null, null));
+        floating(t, x, y, w, h, Math.min(w / 2, 24), 0.2f);
+        Gfx.logo(t, x + w / 2 - 10, y + 8, 20);
+        Gfx.textCentered("VIDAL", x + w / 2, y + 32, Gfx.SMALL - 2, Font.Weight.BOLD, Colors.withAlpha(t.text(), 0x70));
+        hits.add(new Hit(HitType.DRAG, x, y, w, 48, null, null));
         Category[] cats = Category.values();
         int bottomItems = 4;
-        float bub = MathHelper.clamp((h - 46 - 26) / (cats.length + bottomItems) - 5, 18, 30);
-        float step = bub + 5;
-        float cy = y + 46;
-        boolean inCategories = panel != Panel.SETTINGS && panel != Panel.THEME && search.isEmpty();
+        float bub = MathHelper.clamp((h - 76 - 28) / (cats.length + bottomItems) - 5, 17, 26);
+        float step = bub + 6;
+        float cy = y + 48;
+        boolean inCategories = (panel == Panel.NONE || panel == Panel.MODULE) && search.isEmpty();
         for (Category c : cats) {
             boolean sel = inCategories && c == category;
             long on = ModuleManager.byCategory(c).stream().filter(Module::isEnabled).count();
             dockItem(t, x + w / 2, cy + bub / 2, bub, sel, c.label, on, () -> {}, c, null);
             cy += step;
         }
-        float by = y + h - 10 - bottomItems * (bub + 5) + 5;
-        Gfx.round(x + 12, by - 4, w - 24, 1, 0.5f, 0x1CFFFFFF);
+        float by = y + h - 12 - bottomItems * (bub + 6) + 4;
+        Gfx.roundGradient(x + 14, by - 8, w - 28, 1, 0.5f, Colors.withAlpha(t.accent(), 0x30), Colors.withAlpha(t.accent2(), 0x30));
         Object[][] general = {{Panel.ACCOUNT, "Account"}, {Panel.SETTINGS, "Settings"}, {Panel.THEME, "Theme"}, {null, "HUD Editor"}};
         for (Object[] g : general) {
             dockItem(t, x + w / 2, by + bub / 2, bub, g[0] != null && panel == g[0], (String) g[1], 0, null, null, g);
-            by += bub + 5;
+            by += bub + 6;
         }
     }
 
@@ -418,16 +443,23 @@ public class ClickGuiScreen extends Screen {
         else hits.add(new Hit(HitType.GENERAL, x, y, size, size, general[0], general[1]));
     }
 
-    /** A simple head-and-shoulders glyph for the account page. */
+    /** Head-and-shoulders avatar glyph in a thin ring, with an online pip. */
     private static void personIcon(float cx, float cy, int col) {
-        Gfx.circle(cx, cy - 3.4f, 3.6f, col);
-        Gfx.roundGradient(cx - 6.2f, cy + 1.2f, 12.4f, 6.6f, 3.3f, col, Colors.withAlpha(col, 0x80));
+        Gfx.ring(cx, cy, 6.8f, 1, Colors.withAlpha(col, 0x48));
+        Gfx.circle(cx, cy - 2.5f, 2.45f, col);
+        Gfx.roundGradient(cx - 5.3f, cy + 1.5f, 10.6f, 5.6f, 2.8f, col, Colors.withAlpha(col, 0x70));
+        Gfx.circle(cx + 5.1f, cy - 5.1f, 1.35f, 0xFF5CFFB0);
+        Gfx.ring(cx + 5.1f, cy - 5.1f, 1.35f, 1, 0x40000000);
     }
 
+    /** Two stacked HUD cards with a live accent bar, instead of a single generic window. */
     private static void hudIcon(float cx, float cy, int col) {
-        Gfx.outline(cx - 6, cy - 4.5f, 12, 9, 2.2f, 1, col, col);
-        Gfx.round(cx - 4.2f, cy - 2.8f, 4, 2.4f, 1, col);
-        Gfx.round(cx + 1.2f, cy + 0.6f, 3, 2.2f, 1, col);
+        Gfx.outline(cx - 6.4f, cy - 4.4f, 9.6f, 8.2f, 2.4f, 1, Colors.withAlpha(col, 0xB0), Colors.withAlpha(col, 0xB0));
+        Gfx.round(cx - 4.9f, cy - 2.9f, 3.4f, 1.3f, 0.65f, col);
+        Gfx.round(cx - 4.9f, cy - 0.7f, 5.2f, 1.1f, 0.55f, Colors.withAlpha(col, 0x90));
+        Gfx.outline(cx - 1.4f, cy - 0.8f, 8.2f, 6.4f, 2.2f, 1, col, col);
+        Gfx.round(cx + 0.1f, cy + 0.6f, 2.9f, 1.2f, 0.6f, col);
+        Gfx.round(cx + 0.1f, cy + 2.6f, 4.6f, 1.1f, 0.55f, Colors.withAlpha(col, 0x90));
     }
 
     private void drawDockTip(Theme t) {
@@ -444,14 +476,29 @@ public class ClickGuiScreen extends Screen {
     private void drawHeader(Theme t, float dt, float x, float y, float w, float h) {
         floating(t, x, y, w, h, h / 2, 0.2f);
         hits.add(new Hit(HitType.DRAG, x, y, w, h, null, null));
-        float ty = y + h / 2 - 5.5f, gx = x + 14;
-        gx += Gfx.text("Hello, ", gx, ty, Gfx.BODY + 0.5f, Font.Weight.SEMIBOLD, t.text());
-        float sh = h - 10, sw = MathHelper.clamp(w * 0.38f, 100, 190), sx = x + w - 5 - sw, sy = y + 5;
-        float nameW = Gfx.text(Gfx.ellipsize(playerName(), Math.max(30, sx - 70 - gx), Gfx.BODY + 0.5f, Font.Weight.BOLD), gx, ty, Gfx.BODY + 0.5f, Font.Weight.BOLD, t.accent());
-        String clock = LocalTime.now().format(CLOCK);
-        float cw = Gfx.width(clock, Gfx.BODY, Font.Weight.SEMIBOLD);
-        float ccx = Math.max(gx + nameW + 14, x + w / 2 - cw / 2);
-        if (ccx + cw < sx - 10) Gfx.text(clock, ccx, ty + 0.5f, Gfx.BODY, Font.Weight.SEMIBOLD, Colors.withAlpha(t.text(), 0xB0));
+        float ty = y + h / 2 - 6f, gx = x + 16;
+        // Wordmark on a soft plate so it reads over bright scenery, then the build tag.
+        Gfx.round(x + 11, y + 5, 103, h - 10, (h - 10) / 2, 0x24000000);
+        String brand = "VIDAL";
+        for (int i = 0; i < brand.length(); i++) {
+            String ch = String.valueOf(brand.charAt(i));
+            gx += Gfx.text(ch, gx, ty - 1, Gfx.BODY + 4, Font.Weight.BOLD, t.gradient(i * 0.2f));
+            gx += 0.8f;
+        }
+        float vw = Gfx.width(VERSION, Gfx.SMALL - 1, Font.Weight.BOLD) + 9;
+        Gfx.round(gx + 3, y + h / 2 - 6.5f, vw, 13, 6.5f, Colors.withAlpha(t.accent(), 0x26));
+        Gfx.textCentered(VERSION, gx + 3 + vw / 2, y + h / 2 - 4.1f, Gfx.SMALL - 1, Font.Weight.BOLD, t.accent());
+        gx += vw + 12;
+        float sh = h - 10, sw = MathHelper.clamp(w * 0.32f, 104, 178), sx = x + w - 5 - sw, sy = y + 5;
+        float avail = sx - 12 - gx;
+        if (avail > 96) {
+            String greet = playerName();
+            float gw = Gfx.width(greet, Gfx.SMALL + 0.5f, Font.Weight.SEMIBOLD);
+            float pillW = Math.min(avail, gw + 20);
+            Gfx.round(gx, y + h / 2 - 7, pillW, 14, 7, 0x1CFFFFFF);
+            Gfx.circle(gx + 8, y + h / 2, 2f, 0xFF5CFFB0);
+            Gfx.text(Gfx.ellipsize(greet, pillW - 18, Gfx.SMALL + 0.5f, Font.Weight.SEMIBOLD), gx + 13, ty + 1.5f, Gfx.SMALL + 0.5f, Font.Weight.SEMIBOLD, Colors.withAlpha(t.textDim(), 0xE0));
+        }
         searchGlow.to(searchFocus ? 1 : 0).update(animated() ? dt : 1f);
         float sg = searchGlow.value;
         Gfx.round(sx, sy, sw, sh, sh / 2, Colors.withAlpha(0x000000, (int) (0x2C + 0x14 * sg)));
@@ -482,9 +529,19 @@ public class ClickGuiScreen extends Screen {
                 : panel == Panel.ACCOUNT ? com.trace.refract.util.AccountStats.status
                 : panel == Panel.SETTINGS ? "Window, glass and sound" : panel == Panel.THEME ? "Accent colours for the whole client"
                 : mods.stream().filter(Module::isEnabled).count() + " of " + mods.size() + " active  ·  " + category.subtitle;
-        Gfx.text(title, x + 18, y + 12, Gfx.LARGE + 2, Font.Weight.BOLD, t.text());
-        Gfx.text(Gfx.ellipsize(sub, w - 36, Gfx.SMALL, Font.Weight.REGULAR), x + 18, y + 29, Gfx.SMALL, t.textDim());
-        float ly = y + 44, lh = h - 50, lx = x + 10, lw = w - 20;
+        // Title glyph in a tinted bubble, then the page title and its one-line summary.
+        float ibx = x + 15, iby = y + 10, ibs = 22;
+        Gfx.round(ibx, iby, ibs, ibs, 8, Colors.withAlpha(t.accent(), 0x22));
+        Gfx.outline(ibx, iby, ibs, ibs, 8, 1, Colors.withAlpha(t.accent(), 0x40), 0x08FFFFFF);
+        float icx = ibx + ibs / 2, icy = iby + ibs / 2;
+        if (panel == Panel.ACCOUNT) personIcon(icx, icy, t.text());
+        else if (panel == Panel.SETTINGS) gearIcon(icx, icy, t.text());
+        else if (panel == Panel.THEME) paletteIcon(t, icx, icy, t.text());
+        else if (searching) { Gfx.ring(icx, icy, 4.2f, 1, t.text()); Gfx.round(icx + 3.2f, icy + 3.2f, 3.6f, 1.4f, 0.7f, t.text()); }
+        else icon(category, icx, icy, t.text(), t);
+        Gfx.text(title, x + 46, y + 11, Gfx.LARGE, Font.Weight.BOLD, t.text());
+        Gfx.text(Gfx.ellipsize(sub, w - 64, Gfx.SMALL, Font.Weight.REGULAR), x + 46, y + 27, Gfx.SMALL, t.textDim());
+        float ly = y + 46, lh = h - 52, lx = x + 10, lw = w - 20;
         listTop = ly + 4;
         Gfx.round(x + 16, ly - 3, w - 32, 1, 0.5f, 0x16FFFFFF);
         hits.add(new Hit(HitType.GRID_AREA, x, ly, w, lh, null, null));
@@ -512,8 +569,8 @@ public class ClickGuiScreen extends Screen {
             for (int i = 0; i < mods.size(); i++) if (!cardIn.containsKey(mods.get(i))) cardIn.put(mods.get(i), now + (staggerNext ? i * STAGGER_S : 0f));
             staggerNext = false;
             // Floating cards grid: modules are glass tiles; the open one spans the full width with its settings.
-            int cols = lw > 430 ? 3 : 2;
-            float gap = 8, tw = (lw - gap * (cols - 1)) / cols, th = 62;
+            int cols = lw > 560 ? 3 : 2;
+            float gap = 8, tw = (lw - gap * (cols - 1)) / cols, th = 60;
             int col = 0;
             for (int i = 0; i < mods.size(); i++) {
                 Module mod = mods.get(i);
@@ -706,66 +763,91 @@ public class ClickGuiScreen extends Screen {
         int a3 = sel ? Colors.lerp(t.accent3(), 0xFFFFFFFF, 0.6f) : t.accent3();
         switch (c) {
             case COMBAT -> {
-                // Two crossed blades: one in line colour, one in accent, with accent pommels.
-                Gfx.stroke(cx - 4.6f, cy + 4.6f, cx + 4.8f, cy - 4.8f, 1.7f, line);
-                Gfx.stroke(cx + 4.6f, cy + 4.6f, cx - 4.8f, cy - 4.8f, 1.7f, a1);
-                Gfx.stroke(cx - 6f, cy + 2.4f, cx - 2.4f, cy + 6f, 1.4f, line);
-                Gfx.stroke(cx + 6f, cy + 2.4f, cx + 2.4f, cy + 6f, 1.4f, a1);
-                Gfx.circle(cx - 5.6f, cy + 5.6f, 1.2f, a3);
-                Gfx.circle(cx + 5.6f, cy + 5.6f, 1.2f, a3);
+                // Crossed blades with guards and pommels; one arm in the theme accent, the other in line colour.
+                Gfx.stroke(cx - 5f, cy + 5.4f, cx + 5.4f, cy - 5.4f, 1.9f, line);
+                Gfx.stroke(cx + 5f, cy + 5.4f, cx - 5.4f, cy - 5.4f, 1.9f, a1);
+                Gfx.stroke(cx - 6.6f, cy + 2.3f, cx - 2.3f, cy + 6.6f, 1.5f, a3);
+                Gfx.stroke(cx + 6.6f, cy + 2.3f, cx + 2.3f, cy + 6.6f, 1.5f, a3);
+                Gfx.circle(cx - 5.9f, cy + 5.9f, 1.25f, a1);
+                Gfx.circle(cx + 5.9f, cy + 5.9f, 1.25f, a2);
+                Gfx.circle(cx, cy - 6.3f, 0.8f, 0xFFFFFFFF);
             }
             case HUNTING -> {
-                Gfx.ring(cx, cy, 6f, 1, line);
-                Gfx.ring(cx, cy, 3.2f, 1, Colors.mulAlpha(line, 0.6f));
-                double a = Time.seconds() * (sel ? 2.2 : 0.0) - 0.8;
-                Gfx.stroke(cx, cy, cx + (float) Math.cos(a) * 5.4f, cy + (float) Math.sin(a) * 5.4f, 1.2f, a1);
-                Gfx.circle(cx + 3f, cy - 2.8f, 1.6f, a2);
-                Gfx.circle(cx - 2.4f, cy + 3.2f, 1.1f, a3);
+                // Radar: two rings, crosshair ticks, sweep hand and two targets.
+                Gfx.ring(cx, cy, 6.1f, 1, line);
+                Gfx.ring(cx, cy, 2.9f, 1, Colors.mulAlpha(line, 0.55f));
+                Gfx.stroke(cx, cy - 6.9f, cx, cy - 5.2f, 1f, a3);
+                Gfx.stroke(cx, cy + 5.2f, cx, cy + 6.9f, 1f, a3);
+                Gfx.stroke(cx - 6.9f, cy, cx - 5.2f, cy, 1f, a3);
+                Gfx.stroke(cx + 5.2f, cy, cx + 6.9f, cy, 1f, a3);
+                double a = Time.seconds() * (sel ? 2.1 : 0.0) - 0.8;
+                Gfx.stroke(cx, cy, cx + (float) Math.cos(a) * 5.4f, cy + (float) Math.sin(a) * 5.4f, 1.3f, a1);
+                Gfx.circle(cx + 3.1f, cy - 2.9f, 1.7f, a2);
+                Gfx.circle(cx - 2.5f, cy + 3.2f, 1.15f, a3);
+                Gfx.circle(cx, cy, 1.2f, 0xFFFFFFFF);
             }
             case RENDER -> {
-                Gfx.stroke(cx - 6.4f, cy, cx - 2.6f, cy - 3.6f, 1.3f, line);
-                Gfx.stroke(cx - 2.6f, cy - 3.6f, cx + 2.6f, cy - 3.6f, 1.3f, line);
-                Gfx.stroke(cx + 2.6f, cy - 3.6f, cx + 6.4f, cy, 1.3f, line);
-                Gfx.stroke(cx - 6.4f, cy, cx - 2.6f, cy + 3.6f, 1.3f, line);
-                Gfx.stroke(cx - 2.6f, cy + 3.6f, cx + 2.6f, cy + 3.6f, 1.3f, line);
-                Gfx.stroke(cx + 2.6f, cy + 3.6f, cx + 6.4f, cy, 1.3f, line);
-                Gfx.circle(cx, cy, 2.6f, a1);
-                Gfx.circle(cx, cy, 1.1f, a2);
-                Gfx.circle(cx + 0.9f, cy - 0.9f, 0.5f, 0xFFFFFFFF);
+                // Eye with a gradient iris, upper lid and two light glints.
+                Gfx.stroke(cx - 6.8f, cy, cx - 2.4f, cy - 4f, 1.35f, line);
+                Gfx.stroke(cx - 2.4f, cy - 4f, cx + 2.4f, cy - 4f, 1.35f, line);
+                Gfx.stroke(cx + 2.4f, cy - 4f, cx + 6.8f, cy, 1.35f, line);
+                Gfx.stroke(cx - 6.8f, cy, cx - 2.4f, cy + 4f, 1.35f, line);
+                Gfx.stroke(cx - 2.4f, cy + 4f, cx + 2.4f, cy + 4f, 1.35f, line);
+                Gfx.stroke(cx + 2.4f, cy + 4f, cx + 6.8f, cy, 1.35f, line);
+                Gfx.circle(cx, cy, 3f, a1);
+                Gfx.circle(cx, cy, 1.55f, a2);
+                Gfx.circle(cx - 0.9f, cy - 1f, 0.7f, 0xFFFFFFFF);
+                Gfx.circle(cx + 6.9f, cy - 5.6f, 0.65f, a3);
             }
             case MISC -> {
-                Gfx.round(cx - 5.8f, cy - 5.8f, 5f, 5f, 1.6f, a1);
-                Gfx.round(cx + 0.8f, cy - 5.8f, 5f, 5f, 1.6f, line);
-                Gfx.round(cx - 5.8f, cy + 0.8f, 5f, 5f, 1.6f, line);
-                Gfx.round(cx + 0.8f, cy + 0.8f, 5f, 5f, 1.6f, a3);
+                // Compass rose: ring, four ticks and a two-tone needle.
+                Gfx.ring(cx, cy, 6f, 1, line);
+                Gfx.stroke(cx, cy - 6.9f, cx, cy - 5.1f, 1f, Colors.mulAlpha(line, 0.5f));
+                Gfx.stroke(cx, cy + 5.1f, cx, cy + 6.9f, 1f, Colors.mulAlpha(line, 0.5f));
+                Gfx.stroke(cx - 6.9f, cy, cx - 5.1f, cy, 1f, Colors.mulAlpha(line, 0.5f));
+                Gfx.stroke(cx + 5.1f, cy, cx + 6.9f, cy, 1f, Colors.mulAlpha(line, 0.5f));
+                Gfx.stroke(cx, cy + 4.4f, cx, cy - 4.4f, 2.1f, a1);
+                Gfx.stroke(cx - 2.5f, cy, cx + 2.5f, cy, 1.4f, a3);
+                Gfx.circle(cx, cy, 1.25f, 0xFFFFFFFF);
             }
             case CLIENT -> {
-                Gfx.outline(cx - 6.4f, cy - 5f, 12.8f, 10f, 2.6f, 1, line, line);
-                Gfx.round(cx - 6.4f, cy - 5f, 12.8f, 3.2f, 1.6f, Colors.mulAlpha(line, 0.35f));
-                Gfx.circle(cx - 4.2f, cy - 3.4f, 0.7f, a1);
-                Gfx.circle(cx - 2.4f, cy - 3.4f, 0.7f, a2);
-                Gfx.circle(cx - 0.6f, cy - 3.4f, 0.7f, a3);
-                Gfx.round(cx - 4f, cy + 0.2f, 5.2f, 1.2f, 0.6f, a1);
-                Gfx.round(cx - 4f, cy + 2.4f, 8f, 1.2f, 0.6f, line);
+                // Brand shield with the Vidal V cut into it.
+                Gfx.stroke(cx - 5.6f, cy - 4.2f, cx, cy - 6.4f, 1.4f, line);
+                Gfx.stroke(cx + 5.6f, cy - 4.2f, cx, cy - 6.4f, 1.4f, line);
+                Gfx.stroke(cx - 5.6f, cy - 4.2f, cx - 5.6f, cy + 1.4f, 1.4f, line);
+                Gfx.stroke(cx + 5.6f, cy - 4.2f, cx + 5.6f, cy + 1.4f, 1.4f, line);
+                Gfx.stroke(cx - 5.6f, cy + 1.4f, cx, cy + 6.6f, 1.4f, line);
+                Gfx.stroke(cx + 5.6f, cy + 1.4f, cx, cy + 6.6f, 1.4f, line);
+                Gfx.stroke(cx - 2.5f, cy - 2.1f, cx, cy + 2.2f, 2f, a1);
+                Gfx.stroke(cx + 2.5f, cy - 2.1f, cx, cy + 2.2f, 2f, a2);
+                Gfx.circle(cx, cy - 2.6f, 0.65f, 0xFFFFFFFF);
             }
         }
     }
 
-    /** Settings gear: rounded teeth around a ring with a clean hole. */
+    /** Settings gear: eight beveled teeth, a thick ring and a clean hole with an accent rim. */
     private static void gearIcon(float cx, float cy, int col) {
         for (int i = 0; i < 8; i++) {
             double a = i * Math.PI / 4;
-            Gfx.stroke(cx + (float) Math.cos(a) * 3.6f, cy + (float) Math.sin(a) * 3.6f, cx + (float) Math.cos(a) * 5.6f, cy + (float) Math.sin(a) * 5.6f, 2f, col);
+            float x1 = cx + (float) Math.cos(a) * 3.7f, y1 = cy + (float) Math.sin(a) * 3.7f;
+            float x2 = cx + (float) Math.cos(a) * 6.1f, y2 = cy + (float) Math.sin(a) * 6.1f;
+            Gfx.stroke(x1, y1, x2, y2, 2.2f, col);
         }
-        Gfx.circle(cx, cy, 4.2f, col);
-        Gfx.circle(cx, cy, 1.8f, 0xFF15171C);
+        Gfx.circle(cx, cy, 4.5f, col);
+        Gfx.circle(cx, cy, 2.3f, Colors.shade(col, -0.55f));
+        Gfx.circle(cx, cy, 1.35f, Colors.withAlpha(col, 0x90));
+        Gfx.circle(cx - 0.7f, cy - 0.8f, 0.45f, 0xFFFFFFFF);
     }
 
+    /** Painter's palette: rounded body, thumb hole, three theme swatches and a brush stroke. */
     private static void paletteIcon(Theme t, float cx, float cy, int col) {
-        Gfx.ring(cx, cy, 5.5f, 1, col);
-        Gfx.circle(cx - 2.2f, cy - 1.6f, 1.3f, t.accent());
-        Gfx.circle(cx + 1.6f, cy - 2.4f, 1.3f, t.accent2());
-        Gfx.circle(cx + 2.4f, cy + 1.4f, 1.3f, 0xFFFFFFFF);
+        Gfx.round(cx - 6f, cy - 5.4f, 12f, 10.8f, 5.2f, Colors.withAlpha(col, 0x26));
+        Gfx.outline(cx - 6f, cy - 5.4f, 12f, 10.8f, 5.2f, 1, col, Colors.withAlpha(col, 0xB0));
+        Gfx.circle(cx + 1.3f, cy + 1.6f, 1.8f, Colors.withAlpha(0x000000, 0x50));
+        Gfx.circle(cx - 2.6f, cy - 1.9f, 1.35f, t.accent());
+        Gfx.circle(cx + 0.7f, cy - 2.8f, 1.35f, t.accent2());
+        Gfx.circle(cx + 3.4f, cy - 0.9f, 1.35f, t.accent3());
+        Gfx.stroke(cx - 4.6f, cy + 4.2f, cx - 1.8f, cy + 1.4f, 1.2f, 0xFFFFFFFF);
     }
 
 
@@ -1030,7 +1112,7 @@ public class ClickGuiScreen extends Screen {
     }
 
     private void switchCategory(Category c) {
-        if (panel == Panel.SETTINGS || panel == Panel.THEME) { panel = Panel.NONE; if (c == category) return; }
+        if (panel == Panel.SETTINGS || panel == Panel.THEME || panel == Panel.ACCOUNT) { panel = Panel.NONE; if (c == category) return; }
         if (c == category && search.isEmpty()) return;
         category = c;
         search = "";

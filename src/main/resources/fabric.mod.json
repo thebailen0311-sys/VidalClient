@@ -2,8 +2,9 @@
   "schemaVersion": 1,
   "id": "refract",
   "version": "${version}",
-  "name": "Refract",
-  "description": "Base-hunting client: underground Base Finder with a surface filter, Activity Finder, Growth ESP (overgrown kelp and amethyst), Sound Locator with tracers, Storage ESP and Freecam.",
+  "name": "Vidal",
+  "description": "Vidal client: base finding, PvP helpers, cosmetics and a fully animated glass interface.",
+  "icon": "assets/refract/icon.png",
   "authors": ["Trace"],
   "license": "MIT",
   "contact": {

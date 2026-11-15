@@ -460,9 +460,10 @@ public final class LiveTest {
             }
             case "gui" -> {
                 if (ticks == 20) { cmd(mc, "gamemode creative"); enable("ambience", true); log("ambience on"); }
-                if (ticks == 40) { mc.setScreen(new com.trace.refract.gui.ClickGuiScreen()); log("gui open"); }
+                if (ticks == 40) { com.trace.refract.gui.ClickGuiScreen.focusGrid(com.trace.refract.module.Category.HUNTING); mc.setScreen(new com.trace.refract.gui.ClickGuiScreen()); log("gui open"); }
                 if (ticks == 70) { mc.setScreen(null); log("gui closed -> " + (mc.currentScreen == null)); }
                 if (ticks == 110) { mc.setScreen(new com.trace.refract.gui.ClickGuiScreen()); log("gui open 2"); }
+                if (ticks == 130) shoot(mc, "gui-main.png");
                 if (ticks == 150) { mc.setScreen(null); log("gui closed 2"); }
                 if (ticks > 60 && ticks % 30 == 0) log("tick " + ticks + " alive, screen=" + mc.currentScreen);
             }
